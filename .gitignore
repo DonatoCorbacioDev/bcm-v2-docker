@@ -1,0 +1,16 @@
+# Environment variables (NEVER commit!)
+.env
+.env.local
+.env.*.local
+
+# Docker volumes
+mysql_data/
+
+# IDE 
+.idea/
+.vscode
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
