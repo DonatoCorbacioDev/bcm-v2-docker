@@ -13,8 +13,8 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./bcm-v2-backend/sql/DDL:/docker-entrypoint-initdb.d/01-schema
-      - ./bcm-v2-backend/sql/DML:/docker-entrypoint-initdb.d/02-data
+      - ../bcm-v2-backend/sql/DDL:/docker-entrypoint-initdb.d/01-schema
+      - ../bcm-v2-backend/sql/DML:/docker-entrypoint-initdb.d/02-data
     networks:
       - bcm-network
     healthcheck:
@@ -27,7 +27,7 @@ services:
   # Spring Boot Backend
   backend:
     build:
-      context: ./bcm-v2-backend
+      context: ../bcm-v2-backend
       dockerfile: Dockerfile
     container_name: bcm-backend
     restart: unless-stopped
@@ -61,7 +61,7 @@ services:
    # Next.js Frontend
   frontend:
     build:
-      context: ./bcm-v2-frontend
+      context: ../bcm-v2-frontend
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8090/api/v1
