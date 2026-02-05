@@ -27,9 +27,9 @@ This repository contains the **Docker Compose configuration** for running the co
 
 ```mermaid
 graph TB
-    subgraph "Docker Network: bcm-network"
-        A[Next.js Frontend<br/>Port 3000] -->|REST API| B[Spring Boot Backend<br/>Port 8090]
-        B -->|JDBC| C[MySQL 8.0<br/>Port 3307]
+    subgraph DockerNet["Docker Network: bcm-network"]
+        A["Next.js Frontend<br>(Port 3000)"] -->|REST API| B["Spring Boot Backend<br>(Port 8090)"]
+        B -->|JDBC| C["MySQL 8.0<br>(Port 3307)"]
     end
     D[Browser] -->|HTTP| A
     E[Developer] -->|Docker Compose| A
