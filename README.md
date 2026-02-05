@@ -36,10 +36,10 @@ graph TB
     E -->|Docker Compose| B
     E -->|Docker Compose| C
     
-    style A fill:#2196f3,stroke:#0d47a1,color:#fff
-    style B fill:#4caf50,stroke:#1b5e20,color:#fff
-    style C fill:#ff9800,stroke:#e65100,color:#000
-    style D fill:#607d8b,stroke:#263238,color:#fff
+    style A fill:#64b5f6,stroke:#0d47a1,stroke-width:3px,color:#000
+    style B fill:#81c784,stroke:#1b5e20,stroke-width:3px,color:#000
+    style C fill:#ffb74d,stroke:#e65100,stroke-width:3px,color:#000
+    style D fill:#90a4ae,stroke:#263238,stroke-width:3px,color:#000
 ```
 
 ### Project Structure
