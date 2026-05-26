@@ -13,8 +13,6 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ../bcm-v2-backend/sql/DDL:/docker-entrypoint-initdb.d/01-schema
-      - ../bcm-v2-backend/sql/DML:/docker-entrypoint-initdb.d/02-data
     networks:
       - bcm-network
     healthcheck:
@@ -58,7 +56,7 @@ services:
       retries: 3
       start_period: 60s
 
-   # Next.js Frontend
+  # Next.js Frontend
   frontend:
     build:
       context: ../bcm-v2-frontend
