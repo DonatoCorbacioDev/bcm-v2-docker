@@ -2,6 +2,7 @@
 
 > Complete Docker Compose setup for running the Business Contracts Manager full-stack application
 
+[![CI](https://github.com/DonatoCorbacioDev/bcm-v2-docker/actions/workflows/ci.yml/badge.svg)](https://github.com/DonatoCorbacioDev/bcm-v2-docker/actions/workflows/ci.yml)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-brightgreen?logo=spring)](https://spring.io/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-blue?logo=mysql)](https://www.mysql.com/)
@@ -407,16 +408,18 @@ lsof -ti:3000 | xargs kill -9
 
 **Solution:**
 
-```bash
-# 1. Check if init scripts ran
-docker-compose logs mysql | grep "docker-entrypoint-initdb.d"
+The schema is created automatically by **Flyway** on backend startup (not by MySQL init scripts). If the tables are missing:
 
-# 2. If not, restart with fresh volume
+```bash
+# 1. Check Flyway migration logs
+docker-compose logs backend | grep -i flyway
+
+# 2. Verify MySQL is healthy before backend starts
+docker-compose logs mysql | grep "ready for connections"
+
+# 3. Restart with a fresh volume (Flyway will re-run all migrations)
 docker-compose down -v
 docker-compose up -d
-
-# 3. Or manually run DDL scripts
-docker exec -i bcm-mysql mysql -uroot -p bcm < ../bcm-v2-backend/sql/DDL/bcm_schema.sql
 ```
 
 ---
