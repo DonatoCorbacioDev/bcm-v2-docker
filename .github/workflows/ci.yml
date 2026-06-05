@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate Docker Compose
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create dummy build context directories
+        run: mkdir -p ../bcm-v2-backend ../bcm-v2-frontend
+
+      - name: Validate docker-compose.yml syntax
+        run: docker compose config --quiet
+        env:
+          DB_ROOT_PASSWORD: ci-test
+          DB_USERNAME: ci-user
+          DB_PASSWORD: ci-password
+          JWT_SECRET: ci-secret-key-for-validation-only-not-real-min-256-bits
+          MAIL_HOST: smtp.gmail.com
+          MAIL_PORT: "587"
+          MAIL_USERNAME: test@test.com
+          MAIL_PASSWORD: test

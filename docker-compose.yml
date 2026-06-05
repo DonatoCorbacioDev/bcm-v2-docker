@@ -1,0 +1,114 @@
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: bcm-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: bcm
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - bcm-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-rootpassword123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Spring Boot Backend
+  backend:
+    build:
+      context: ../bcm-v2-backend
+      dockerfile: Dockerfile
+    container_name: bcm-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/bcm?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME:-bcm_user}
+      DB_PASSWORD: ${DB_PASSWORD:-bcm_password}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-min-256-bits}
+      JWT_EXPIRATION_MS: 86400000
+      SPRING_PROFILES_ACTIVE: prod
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      FRONTEND_BASE_URL: http://localhost:3000
+      UPLOAD_DIR: /app/uploads
+      MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
+      ML_FASTAPI_URL: http://ml:8000
+    ports:
+      - "8090:8090"
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - bcm-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8090/api/v1/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ../bcm-v2-frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8090/api/v1
+    container_name: bcm-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8090/api/v1
+    ports:
+      - "3000:3000"
+    networks:
+      - bcm-network
+
+  # FastAPI ML Service
+  ml:
+    build:
+      context: ../bcm-v2-ml
+      dockerfile: Dockerfile
+    container_name: bcm-ml
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: mysql+pymysql://${DB_USERNAME:-bcm_user}:${DB_PASSWORD:-bcm_password}@mysql:3306/bcm
+      CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+    networks:
+      - bcm-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  bcm-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  uploads_data:
+    driver: local
