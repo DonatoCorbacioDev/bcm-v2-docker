@@ -92,6 +92,7 @@ services:
     environment:
       DB_URL: mysql+pymysql://${DB_USERNAME:-bcm_user}:${DB_PASSWORD:-bcm_password}@mysql:3306/bcm
       CORS_ORIGINS: http://localhost:3000
+      OLLAMA_URL: http://host.docker.internal:11434
     ports:
       - "8000:8000"
     networks:
