@@ -643,7 +643,9 @@ docker builder prune -a
 
 ## 📄 License
 
-This project is licensed under a **Custom Non-Commercial License**.
+This project is licensed under a **Custom Non-Commercial License** - see the [LICENSE](./LICENSE) file for full details.
+
+> **This project itself is NOT open source.** It is published as a personal portfolio project under a custom restrictive license. See [LICENSE](./LICENSE) for details.
 
 - ✅ Available for educational and portfolio purposes
 - ✅ Free to review and learn from
