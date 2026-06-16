@@ -38,7 +38,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-bcm_password}
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-min-256-bits}
       JWT_EXPIRATION_MS: 86400000
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: dev
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
