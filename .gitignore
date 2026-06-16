@@ -6,6 +6,9 @@
 # Docker volumes
 mysql_data/
 
+# Local seed scripts — contain test credentials, do not commit
+scripts/
+
 # IDE 
 .idea/
 .vscode
