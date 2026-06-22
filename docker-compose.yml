@@ -47,6 +47,7 @@ services:
       UPLOAD_DIR: /app/uploads
       MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
       ML_FASTAPI_URL: http://ml:8000
+      ML_INTERNAL_API_KEY: ${ML_INTERNAL_API_KEY:-}
     ports:
       - "8090:8090"
     volumes:
@@ -93,6 +94,7 @@ services:
       DB_URL: mysql+pymysql://${DB_USERNAME:-bcm_user}:${DB_PASSWORD:-bcm_password}@mysql:3306/bcm
       CORS_ORIGINS: http://localhost:3000
       OLLAMA_URL: http://host.docker.internal:11434
+      INTERNAL_API_KEY: ${ML_INTERNAL_API_KEY:-}
     ports:
       - "8000:8000"
     networks:
