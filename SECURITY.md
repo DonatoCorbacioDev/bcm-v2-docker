@@ -44,9 +44,7 @@ This is a **development/demonstration** configuration. The following should be a
 - ⚠️ **Bind mounts** - SQL init scripts mounted from host filesystem
 - ⚠️ **No secrets management** - Using `.env` file instead of Docker secrets
 - ⚠️ **No TLS/SSL** - HTTP only (HTTPS should be enforced in production)
-- ⚠️ **Exposed ports** - Database accessible from host (0.0.0.0:3307)
-- ⚠️ **No health checks** - Containers may accept traffic before ready
-- ⚠️ **No restart policies** - Containers don't auto-restart on failure
+- ⚠️ **frontend has no health check** - mysql, backend and ml do; frontend's `depends_on: backend` still has no readiness probe of its own
 
 ---
 

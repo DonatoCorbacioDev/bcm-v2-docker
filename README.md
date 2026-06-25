@@ -217,9 +217,9 @@ docker-compose ps
 
 ```
 NAME            STATUS      PORTS
-bcm-mysql       Up          0.0.0.0:3307->3306/tcp
-bcm-backend     Up          0.0.0.0:8090->8090/tcp
-bcm-frontend    Up          0.0.0.0:3000->3000/tcp
+bcm-mysql       Up          127.0.0.1:3307->3306/tcp
+bcm-backend     Up          127.0.0.1:8090->8090/tcp
+bcm-frontend    Up          127.0.0.1:3000->3000/tcp
 ```
 
 **Health checks:**
