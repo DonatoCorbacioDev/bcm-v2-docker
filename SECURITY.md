@@ -39,7 +39,6 @@ This is a **development/demonstration** configuration. The following should be a
 
 ### Development Configuration Issues
 
-- ⚠️ **Containers run as root** - Acceptable for local dev, not for production
 - ⚠️ **No resource limits** - Containers can consume all system resources
 - ⚠️ **Bind mounts** - SQL init scripts mounted from host filesystem
 - ⚠️ **No secrets management** - Using `.env` file instead of Docker secrets
