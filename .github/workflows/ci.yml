@@ -29,3 +29,105 @@ jobs:
           MAIL_PORT: "587"
           MAIL_USERNAME: test@test.com
           MAIL_PASSWORD: test
+
+  smoke-test:
+    name: Smoke Test (MySQL + Backend + ML)
+    needs: validate
+    runs-on: ubuntu-latest
+
+    # DB_ROOT_PASSWORD/DB_USERNAME/DB_PASSWORD/JWT_SECRET below are throwaway
+    # values for this ephemeral CI stack only, torn down at the end of the job.
+    env:
+      DB_ROOT_PASSWORD: ci-root-password
+      DB_USERNAME: ci_user
+      DB_PASSWORD: ci-password
+      JWT_SECRET: VXmvlTInPHEbmw2//bTa1wDNIGrN+7tf+JiWiZXfZS4=
+      MAIL_HOST: smtp.gmail.com
+      MAIL_PORT: "587"
+      MAIL_USERNAME: test@test.com
+      MAIL_PASSWORD: test
+      API_BASE: http://localhost:8090/api/v1
+
+    steps:
+      - name: Checkout docker repo
+        uses: actions/checkout@v4
+
+      # backend and ml are separate repos; docker-compose.yml builds them from
+      # ../bcm-v2-backend and ../bcm-v2-ml, so check them out as siblings of
+      # this checkout. The frontend isn't needed for this smoke test (see
+      # bcm-v2-docker#ci for scope).
+      - name: Checkout backend repo
+        uses: actions/checkout@v4
+        with:
+          repository: DonatoCorbacioDev/bcm-v2-backend
+          path: ../bcm-v2-backend
+
+      - name: Checkout ml repo
+        uses: actions/checkout@v4
+        with:
+          repository: DonatoCorbacioDev/bcm-v2-ml
+          path: ../bcm-v2-ml
+
+      - name: Build and start mysql, backend, ml
+        run: docker compose up -d --build mysql backend ml
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf "$API_BASE/actuator/health" | grep -q '"status":"UP"'; then
+              echo "Backend is up."
+              exit 0
+            fi
+            echo "Waiting for backend... ($i/60)"
+            sleep 5
+          done
+          echo "Backend did not become healthy in time."
+          exit 1
+
+      - name: Wait for ML service health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health >/dev/null; then
+              echo "ML service is up."
+              exit 0
+            fi
+            echo "Waiting for ML service... ($i/30)"
+            sleep 5
+          done
+          echo "ML service did not become healthy in time."
+          exit 1
+
+      - name: Register an org and log in
+        id: register
+        run: |
+          RESPONSE=$(curl -sf -X POST "$API_BASE/organizations/register" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "organizationName": "CI Smoke Test Org",
+              "adminUsername": "ci-smoke-admin",
+              "adminPassword": "ci-smoke-password-123",
+              "adminEmail": "ci-smoke@example.com",
+              "adminFirstName": "CI",
+              "adminLastName": "Smoke"
+            }')
+          TOKEN=$(echo "$RESPONSE" | jq -r '.token')
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "Organization registration did not return an access token:"
+            echo "$RESPONSE"
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Call the ML forecast endpoint through the backend proxy
+        run: |
+          curl -sf -H "Authorization: Bearer ${{ steps.register.outputs.token }}" \
+            "$API_BASE/forecast?months=3" | jq -e '.historical'
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
