@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Create dummy build context directories
         run: mkdir -p ../bcm-v2-backend ../bcm-v2-frontend
@@ -35,6 +35,17 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
 
+    # actions/checkout no longer allows checking out a repo outside
+    # GITHUB_WORKSPACE, so all three repos are checked out as sibling
+    # subdirectories *inside* the workspace instead (bcm-v2-docker/,
+    # bcm-v2-backend/, bcm-v2-ml/) — that still matches the ../bcm-v2-backend
+    # and ../bcm-v2-ml relative paths docker-compose.yml expects, just one
+    # level down. This default makes every run step below execute from
+    # bcm-v2-docker/, where docker-compose.yml actually lives.
+    defaults:
+      run:
+        working-directory: bcm-v2-docker
+
     # DB_ROOT_PASSWORD/DB_USERNAME/DB_PASSWORD/JWT_SECRET below are throwaway
     # values for this ephemeral CI stack only, torn down at the end of the job.
     env:
@@ -50,23 +61,26 @@ jobs:
 
     steps:
       - name: Checkout docker repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          path: bcm-v2-docker
 
       # backend and ml are separate repos; docker-compose.yml builds them from
-      # ../bcm-v2-backend and ../bcm-v2-ml, so check them out as siblings of
-      # this checkout. The frontend isn't needed for this smoke test (see
+      # ../bcm-v2-backend and ../bcm-v2-ml (relative to bcm-v2-docker/), so
+      # check them out as siblings of that checkout, both still inside
+      # GITHUB_WORKSPACE. The frontend isn't needed for this smoke test (see
       # bcm-v2-docker#ci for scope).
       - name: Checkout backend repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: DonatoCorbacioDev/bcm-v2-backend
-          path: ../bcm-v2-backend
+          path: bcm-v2-backend
 
       - name: Checkout ml repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: DonatoCorbacioDev/bcm-v2-ml
-          path: ../bcm-v2-ml
+          path: bcm-v2-ml
 
       - name: Build and start mysql, backend, ml
         run: docker compose up -d --build mysql backend ml
