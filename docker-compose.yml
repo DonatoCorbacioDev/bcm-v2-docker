@@ -54,6 +54,9 @@ services:
       MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
       ML_FASTAPI_URL: http://ml:8000
       ML_INTERNAL_API_KEY: ${ML_INTERNAL_API_KEY:-}
+      # Semantic document search — Spring AI calls Ollama on the host
+      # directly, same host.docker.internal bridge the ml service uses below.
+      OLLAMA_URL: http://host.docker.internal:11434
     ports:
       - "127.0.0.1:8090:8090"
     volumes:

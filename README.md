@@ -88,6 +88,7 @@ Ensure you have installed:
 - ✅ [Git](https://git-scm.com/downloads)
 - ✅ Minimum 4GB RAM available for Docker
 - ✅ 10GB free disk space
+- ✅ [Ollama](https://ollama.com/) running on the host, with `llama3.2` (clause risk analysis / agent, via `ml`) and `nomic-embed-text` (semantic document search, via `backend`) pulled — neither service runs Ollama in a container, both reach it through `host.docker.internal`
 
 **Verify installation:**
 
