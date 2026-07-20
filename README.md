@@ -22,6 +22,8 @@ This repository contains the **Docker Compose configuration** for running the co
 - 🔗 Configures networking between all services
 - 📊 Initializes database with schema and seed data
 
+See the [bcm-v2-frontend](https://github.com/DonatoCorbacioDev/bcm-v2-frontend#-screenshots) README for screenshots of the application this stack runs.
+
 ---
 
 ## 🏗️ Architecture
@@ -623,6 +625,7 @@ docker builder prune -a
 
 - **Backend:** [bcm-v2-backend](https://github.com/DonatoCorbacioDev/bcm-v2-backend) - Spring Boot REST API with 100% test coverage
 - **Frontend:** [bcm-v2-frontend](https://github.com/DonatoCorbacioDev/bcm-v2-frontend) - Next.js web application
+- **ML service:** [bcm-v2-ml](https://github.com/DonatoCorbacioDev/bcm-v2-ml) - FastAPI service for risk scoring, forecasting, anomaly detection and LLM-based clause analysis
 
 ### Documentation
 
