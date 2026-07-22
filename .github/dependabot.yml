@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # GitHub Actions used in the workflows under .github/workflows/
+  # (no package manifest of its own here — app dependencies are tracked in
+  # each app's own repo: bcm-v2-backend, bcm-v2-frontend, bcm-v2-ml)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"
