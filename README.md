@@ -252,6 +252,8 @@ Once all services are running:
 | 🩺 **Health Check** | [http://localhost:8090/api/v1/actuator/health](http://localhost:8090/api/v1/actuator/health) | Backend health status |
 | 🗄️ **MySQL** | `localhost:3307` | Connect with MySQL Workbench or CLI |
 
+**Demo login:** on a fresh database, `username: demo` / `password: Demo12345!` (ADMIN role). Seeded automatically by the backend on first startup — the `bcm-v2-backend` repo's `DevDataSeeder` (dev profile only, never runs in a `prod` deployment) creates this account because the migration-seeded default admin is intentionally disabled for security (see that repo's `V14__neutralize_default_admin.sql`). Check `docker compose logs backend | grep "Demo account"` if you don't see it — it's a no-op if the account already exists, so it only prints once.
+
 ---
 
 ## 🎮 Common Commands
