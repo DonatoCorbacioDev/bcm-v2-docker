@@ -669,10 +669,11 @@ Thanks to:
 ---
 
 **⭐ If you're a recruiter or technical reviewer**, this Docker setup demonstrates:
-- Production-ready containerization
-- Multi-service orchestration
-- Proper environment configuration
-- Database initialization automation
-- Network isolation and security
+- Multi-service orchestration (MySQL, backend, frontend, ML) with health checks and dependency ordering
+- Non-root containers and environment-based secrets (`.env`, git-ignored)
+- Database initialization automation via Flyway on backend startup
+- Named volumes for data persistence across `docker compose down`
+
+This compose file is explicitly dev-only, not production-ready as-is — see `SECURITY.md` in this repo for the concrete gap list (TLS, secrets management, resource limits) before running it anywhere reachable outside your own machine.
 
 **💬 Questions?** Open an issue or reach out via email!
