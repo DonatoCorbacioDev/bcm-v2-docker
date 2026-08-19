@@ -71,6 +71,7 @@ bcm-v2/
 | Service | Container Name | Port | Technology | Description |
 |---------|----------------|------|------------|-------------|
 | **MySQL** | `bcm-mysql` | `3307` | MySQL 8.0 | Database server with persistent volume |
+| **Redis** | `bcm-redis` | internal only | Redis 7 | Backs the distributed login/register rate limiter |
 | **Backend** | `bcm-backend` | `8090` | Spring Boot 3.5 + Java 21 | REST API with JWT authentication |
 | **Frontend** | `bcm-frontend` | `3000` | Next.js 16 + React 19 | Web UI with Tailwind CSS |
 

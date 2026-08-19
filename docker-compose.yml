@@ -26,6 +26,21 @@ services:
       retries: 5
       start_period: 30s
 
+  # Redis — backs the distributed login/register rate limiter (RateLimitingFilter).
+  # Not exposed beyond the compose network; nothing outside this stack talks to it.
+  redis:
+    image: redis:7-alpine
+    container_name: bcm-redis
+    restart: unless-stopped
+    networks:
+      - bcm-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # Spring Boot Backend
   backend:
     build:
@@ -36,10 +51,14 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       DB_URL: jdbc:mysql://mysql:3306/bcm?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       DB_USERNAME: ${DB_USERNAME:-bcm_user}
       DB_PASSWORD: ${DB_PASSWORD:-bcm_password}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       # INSECURE DEFAULT — dev only. Override JWT_SECRET in .env for anything
       # beyond a throwaway local stack.
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-min-256-bits}
