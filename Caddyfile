@@ -1,0 +1,19 @@
+# Reverse proxy config for the production VM (Oracle Cloud). Lives at
+# /etc/caddy/Caddyfile there — versioned here so it isn't the only copy.
+# Caddy handles TLS (Let's Encrypt) automatically; this only adds routing
+# and the one security header Caddy doesn't set by default.
+{
+	acme_ca https://acme-v02.api.letsencrypt.org/directory
+	email donato.corbacio.dev@gmail.com
+}
+
+bcm.donatocorbacio.dev {
+	header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+
+	handle /api/v1/* {
+		reverse_proxy 127.0.0.1:8090
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}
