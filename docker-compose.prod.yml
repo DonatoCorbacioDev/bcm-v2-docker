@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Donato Corbacio. All rights reserved.
+# Licensed under the terms of the LICENSE file at the repository root.
+
 # Production overrides for bcm-prod (Oracle VM, 2 OCPU/12GB).
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 services:

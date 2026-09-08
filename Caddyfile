@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Donato Corbacio. All rights reserved.
+# Licensed under the terms of the LICENSE file at the repository root.
+
 # Reverse proxy config for the production VM (Oracle Cloud). Lives at
 # /etc/caddy/Caddyfile there — versioned here so it isn't the only copy.
 # Caddy handles TLS (Let's Encrypt) automatically; this only adds routing
