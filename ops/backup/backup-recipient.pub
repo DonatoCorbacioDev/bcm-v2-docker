@@ -1,0 +1,5 @@
+# BCM production backup recipient — a public age key, safe to commit.
+# Encrypts backups so only whoever holds the matching PRIVATE key can read
+# them; that private key lives offline + in a password manager, never in
+# this repo or on the production VM. Generated 2026-09-22.
+age109s0ejx8vvn7c9xqxnfufqc53nvr3tx2lflg8egghe23uhnnwc2qyxsgs2
