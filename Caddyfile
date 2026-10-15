@@ -13,6 +13,17 @@
 bcm.donatocorbacio.dev {
 	header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
 
+	# /actuator/prometheus leaks internal request patterns/endpoint names
+	# (see docs/SECURITY.md checklist) and has no scraper wired yet, so it's
+	# restricted to the VM itself + private networks instead of being left
+	# open on the same public origin as the rest of the API. Must come before
+	# the general /api/v1/* handle below — Caddy's handle blocks are mutually
+	# exclusive, first match wins.
+	handle /api/v1/actuator/prometheus {
+		@notTrusted not remote_ip 127.0.0.1 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+		respond @notTrusted 403
+		reverse_proxy 127.0.0.1:8090
+	}
 	handle /api/v1/* {
 		reverse_proxy 127.0.0.1:8090
 	}
