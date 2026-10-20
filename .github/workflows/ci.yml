@@ -58,6 +58,9 @@ jobs:
       MAIL_USERNAME: test@test.com
       MAIL_PASSWORD: test
       API_BASE: http://localhost:8090/api/v1
+      # Throwaway, CI-only: enables the backend's /internal/** endpoints so
+      # the smoke test can move its org to PRO (see "Upgrade the org" below).
+      INTERNAL_ADMIN_API_KEY: ci-internal-admin-key
 
     steps:
       - name: Checkout docker repo
@@ -132,6 +135,20 @@ jobs:
           fi
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      # A freshly registered org is FREE, and FREE gets 403 on every ML
+      # endpoint since TierLimitService.requireMlAccess (2026-10-16) - this
+      # smoke test silently broke on that until 2026-10-20. Upgrading through
+      # the same internal endpoint ops uses keeps the test exercising the
+      # real ML proxy path instead of asserting on a 403.
+      - name: Upgrade the org to PRO via the internal endpoint
+        run: |
+          ORG_ID=$(curl -sf -H "Authorization: Bearer ${{ steps.register.outputs.token }}" \
+            "$API_BASE/organizations/me" | jq -e '.id')
+          curl -sf -X PUT "$API_BASE/internal/organizations/$ORG_ID/tier" \
+            -H "X-Internal-Admin-Key: $INTERNAL_ADMIN_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"tier":"PRO"}' | jq -e '.subscriptionTier == "PRO"'
 
       - name: Call the ML forecast endpoint through the backend proxy
         run: |
