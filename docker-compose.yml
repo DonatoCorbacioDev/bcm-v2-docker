@@ -78,6 +78,7 @@ services:
       ML_FASTAPI_URL: http://ml:8000
       ML_INTERNAL_API_KEY: ${ML_INTERNAL_API_KEY:-}
       ML_CLAIMS_PRIVATE_KEY: ${ML_CLAIMS_PRIVATE_KEY:-}
+      INTERNAL_ADMIN_API_KEY: ${INTERNAL_ADMIN_API_KEY:-}
       # Semantic document search — Spring AI calls Ollama on the host
       # directly, same host.docker.internal bridge the ml service uses below.
       OLLAMA_URL: http://host.docker.internal:11434

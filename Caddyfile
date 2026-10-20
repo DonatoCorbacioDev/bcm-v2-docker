@@ -24,6 +24,14 @@ bcm.donatocorbacio.dev {
 		respond @notTrusted 403
 		reverse_proxy 127.0.0.1:8090
 	}
+	# Ops endpoints (manual subscription tier change, ...) are never meant
+	# to be reached from outside the VM at all — not even from private
+	# networks like prometheus above. Call them on the VM directly against
+	# 127.0.0.1:8090, which bypasses Caddy. The backend also requires
+	# X-Internal-Admin-Key (InternalApiKeyGuard); this is the first layer.
+	handle /api/v1/internal* {
+		respond 403
+	}
 	handle /api/v1/* {
 		reverse_proxy 127.0.0.1:8090
 	}
