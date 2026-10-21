@@ -125,7 +125,11 @@ jobs:
               "adminPassword": "ci-smoke-password-123",
               "adminEmail": "ci-smoke@example.com",
               "adminFirstName": "CI",
-              "adminLastName": "Smoke"
+              "adminLastName": "Smoke",
+              "termsVersion": "2026-10-21",
+              "termsAccepted": true,
+              "professionalUse": true,
+              "onerousClausesApproved": true
             }')
           TOKEN=$(echo "$RESPONSE" | jq -r '.token')
           if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
