@@ -114,10 +114,14 @@ jobs:
           echo "ML service did not become healthy in time."
           exit 1
 
+      # Registration is two-step since 2026-10-28: the first call only emails a
+      # 6-digit code, the second one creates the org. The backend runs with the
+      # dev profile here, whose DummyEmailService logs the code instead of
+      # sending it - that log line is how this test gets it.
       - name: Register an org and log in
         id: register
         run: |
-          RESPONSE=$(curl -sf -X POST "$API_BASE/organizations/register" \
+          STARTED=$(curl -sf -X POST "$API_BASE/organizations/register" \
             -H "Content-Type: application/json" \
             -d '{
               "organizationName": "CI Smoke Test Org",
@@ -131,6 +135,17 @@ jobs:
               "professionalUse": true,
               "onerousClausesApproved": true
             }')
+          REGISTRATION_ID=$(echo "$STARTED" | jq -er '.registrationId')
+          CODE=$(docker compose logs backend 2>&1 \
+            | grep -o 'registration code email sent to: ci-smoke@example.com with code: [0-9]\{6\}' \
+            | tail -1 | grep -o '[0-9]\{6\}$')
+          if [ -z "$CODE" ]; then
+            echo "No registration code found in the backend log."
+            exit 1
+          fi
+          RESPONSE=$(curl -sf -X POST "$API_BASE/organizations/register/confirm" \
+            -H "Content-Type: application/json" \
+            -d "{\"registrationId\": \"$REGISTRATION_ID\", \"code\": \"$CODE\"}")
           TOKEN=$(echo "$RESPONSE" | jq -r '.token')
           if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
             echo "Organization registration did not return an access token:"
