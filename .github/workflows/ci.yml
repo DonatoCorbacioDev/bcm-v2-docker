@@ -130,7 +130,7 @@ jobs:
               "adminEmail": "ci-smoke@example.com",
               "adminFirstName": "CI",
               "adminLastName": "Smoke",
-              "termsVersion": "2026-10-21",
+              "termsVersion": "2026-10-28",
               "termsAccepted": true,
               "professionalUse": true,
               "onerousClausesApproved": true
