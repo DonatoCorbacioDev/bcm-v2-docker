@@ -87,6 +87,7 @@ Ensure you have installed:
 - ✅ [Docker Desktop](https://www.docker.com/products/docker-desktop) (Windows/Mac) or Docker Engine (Linux)
 - ✅ [Docker Compose](https://docs.docker.com/compose/install/) (usually included with Docker Desktop)
 - ✅ [Git](https://git-scm.com/downloads)
+- ✅ `openssl` to generate the JWT secret (bundled with Git for Windows, macOS and most Linux distributions)
 - ✅ Minimum 4GB RAM available for Docker
 - ✅ 10GB free disk space
 - ✅ [Ollama](https://ollama.com/) running on the host, with `llama3.2` (clause risk analysis / agent, via `ml`) and `nomic-embed-text` (semantic document search, via `backend`) pulled — neither service runs Ollama in a container, both reach it through `host.docker.internal`
@@ -95,7 +96,7 @@ Ensure you have installed:
 
 ```bash
 docker --version          # Should show: Docker version 20.10+
-docker-compose --version  # Should show: Docker Compose version 2.0+
+docker compose --version  # Should show: Docker Compose version 2.0+
 ```
 
 ---
@@ -108,15 +109,18 @@ docker-compose --version  # Should show: Docker Compose version 2.0+
 # Create project directory
 mkdir bcm-v2 && cd bcm-v2
 
-# Clone all three repositories
+# Clone all four repositories: docker-compose.yml builds every service
+# from the sibling folders below, it doesn't pull prebuilt images
 git clone https://github.com/DonatoCorbacioDev/bcm-v2-backend.git
 git clone https://github.com/DonatoCorbacioDev/bcm-v2-frontend.git
+git clone https://github.com/DonatoCorbacioDev/bcm-v2-ml.git
 git clone https://github.com/DonatoCorbacioDev/bcm-v2-docker.git
 
 # Your structure should now be:
 # bcm-v2/
 #   ├── bcm-v2-backend/
 #   ├── bcm-v2-frontend/
+#   ├── bcm-v2-ml/
 #   └── bcm-v2-docker/
 
 cd bcm-v2-docker
@@ -134,6 +138,10 @@ backend:
 frontend:
   build:
     context: /path/to/your/bcm-v2-frontend  # Update this
+
+ml:
+  build:
+    context: /path/to/your/bcm-v2-ml  # Update this
 ```
 
 ---
@@ -165,17 +173,15 @@ DB_PASSWORD=your_db_password_here
 
 # JWT (generate with: openssl rand -base64 64)
 JWT_SECRET=your_base64_encoded_secret_here
-
-# Email (optional - for password reset)
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USERNAME=your-email@gmail.com
-MAIL_PASSWORD=your-gmail-app-password
 ```
+
+Everything else in `.env.example` (mail, ML keys, Stripe) can stay empty for a local run: the related features are simply off.
+
+**Email in a local run:** this stack starts the backend with the `dev` profile, which never sends real email. Every message (registration code, password reset, invites) is written to the backend log instead, e.g. `docker compose logs backend | grep "registration code"`. You don't need to register at all to try BCM: the demo account in [Step 5](#step-5-access-the-application) is created automatically.
 
 **⚠️ IMPORTANT:** 
 - Generate a **strong JWT secret** (minimum 256 bits)
-- Use **complex passwords** (16+ characters)
+- Use **complex passwords** (16+ characters), but keep `@ : / # ?` out of `DB_PASSWORD`: the ML service puts it inside a database URL (`mysql+pymysql://user:password@mysql/...`), where those characters change its meaning
 - **NEVER** commit `.env` to Git
 
 ---
@@ -184,22 +190,22 @@ MAIL_PASSWORD=your-gmail-app-password
 
 ```bash
 # Build and start all containers (first time: 5-10 minutes)
-docker-compose up -d
+docker compose up -d
 
 # View logs in real-time
-docker-compose logs -f
+docker compose logs -f
 
 # Or view logs for specific service
-docker-compose logs -f backend
-docker-compose logs -f frontend
-docker-compose logs -f mysql
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f mysql
 ```
 
 **What happens during startup:**
 
-1. 🗄️ MySQL container starts and creates database
-2. 📊 SQL initialization scripts run (DDL + DML)
-3. 🔧 Backend builds with Maven and starts Spring Boot
+1. 🗄️ MySQL and Redis containers start; MySQL creates the empty `bcm` database
+2. 🔧 Backend builds with Maven and starts Spring Boot; **Flyway** creates the schema by applying every migration, then the demo account is seeded
+3. 🧠 ML service builds and starts FastAPI
 4. 🎨 Frontend builds with npm and starts Next.js
 5. ✅ All services become healthy
 
@@ -214,16 +220,18 @@ docker-compose logs -f mysql
 **Check all containers are running:**
 
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 **Expected output:**
 
 ```
-NAME            STATUS      PORTS
-bcm-mysql       Up          127.0.0.1:3307->3306/tcp
-bcm-backend     Up          127.0.0.1:8090->8090/tcp
-bcm-frontend    Up          127.0.0.1:3000->3000/tcp
+NAME            STATUS              PORTS
+bcm-mysql       Up (healthy)        127.0.0.1:3307->3306/tcp
+bcm-redis       Up (healthy)        6379/tcp
+bcm-backend     Up (healthy)        127.0.0.1:8090->8090/tcp
+bcm-ml          Up (healthy)        127.0.0.1:8000->8000/tcp
+bcm-frontend    Up (healthy)        127.0.0.1:3000->3000/tcp
 ```
 
 **Health checks:**
@@ -235,8 +243,11 @@ curl http://localhost:8090/api/v1/actuator/health
 # Frontend (should return HTML)
 curl http://localhost:3000
 
-# MySQL (from host)
-mysql -h 127.0.0.1 -P 3307 -u bcm_user -p
+# ML service health
+curl http://localhost:8000/health
+
+# MySQL (uses the client inside the container, nothing to install)
+docker exec -it bcm-mysql mysql -u bcm_user -p bcm
 ```
 
 ---
@@ -263,39 +274,39 @@ Once all services are running:
 
 ```bash
 # Start all services
-docker-compose up -d
+docker compose up -d
 
 # Stop all services (keeps data)
-docker-compose down
+docker compose down
 
 # Stop and remove all data (fresh start)
-docker-compose down -v
+docker compose down -v
 
 # Restart a specific service
-docker-compose restart backend
-docker-compose restart frontend
+docker compose restart backend
+docker compose restart frontend
 
 # Rebuild after code changes
-docker-compose up -d --build
+docker compose up -d --build
 
 # Rebuild specific service
-docker-compose up -d --build backend
+docker compose up -d --build backend
 ```
 
 ### Viewing Logs
 
 ```bash
 # All logs (real-time)
-docker-compose logs -f
+docker compose logs -f
 
 # Last 100 lines from backend
-docker-compose logs --tail=100 backend
+docker compose logs --tail=100 backend
 
 # Follow only errors
-docker-compose logs -f | grep ERROR
+docker compose logs -f | grep ERROR
 
 # Export logs to file
-docker-compose logs > logs.txt
+docker compose logs > logs.txt
 ```
 
 ### Database Operations
@@ -341,10 +352,10 @@ docker exec -it bcm-mysql /bin/bash
 
 ```bash
 # 1. Check MySQL is running
-docker-compose ps mysql
+docker compose ps mysql
 
 # 2. Verify MySQL is healthy (wait 30 seconds after start)
-docker-compose logs mysql | grep "ready for connections"
+docker compose logs mysql | grep "ready for connections"
 
 # 3. Check environment variables
 docker exec bcm-backend printenv | grep DB
@@ -353,7 +364,7 @@ docker exec bcm-backend printenv | grep DB
 docker exec bcm-backend mysql -h bcm-mysql -u bcm_user -p
 
 # 5. Restart backend after MySQL is ready
-docker-compose restart backend
+docker compose restart backend
 ```
 
 ---
@@ -377,10 +388,10 @@ docker exec bcm-frontend printenv | grep NEXT_PUBLIC_API_URL
 docker exec bcm-frontend ping bcm-backend
 
 # 4. Check CORS configuration in backend
-docker-compose logs backend | grep CORS
+docker compose logs backend | grep CORS
 
 # 5. Restart frontend
-docker-compose restart frontend
+docker compose restart frontend
 ```
 
 ---
@@ -418,14 +429,14 @@ The schema is created automatically by **Flyway** on backend startup (not by MyS
 
 ```bash
 # 1. Check Flyway migration logs
-docker-compose logs backend | grep -i flyway
+docker compose logs backend | grep -i flyway
 
 # 2. Verify MySQL is healthy before backend starts
-docker-compose logs mysql | grep "ready for connections"
+docker compose logs mysql | grep "ready for connections"
 
 # 3. Restart with a fresh volume (Flyway will re-run all migrations)
-docker-compose down -v
-docker-compose up -d
+docker compose down -v
+docker compose up -d
 ```
 
 ---
@@ -433,18 +444,18 @@ docker-compose up -d
 ### Problem: Changes not reflected after rebuild
 
 **Symptoms:**
-- Code changes don't appear after `docker-compose up --build`
+- Code changes don't appear after `docker compose up --build`
 
 **Solution:**
 
 ```bash
 # Full rebuild without cache
-docker-compose build --no-cache backend
-docker-compose up -d
+docker compose build --no-cache backend
+docker compose up -d
 
 # Or remove everything and rebuild
-docker-compose down -v --rmi all
-docker-compose up -d --build
+docker compose down -v --rmi all
+docker compose up -d --build
 ```
 
 ---
@@ -502,7 +513,7 @@ openssl rand -base64 64
 # 3. Update .env file with new key
 
 # 4. Restart backend
-docker-compose restart backend
+docker compose restart backend
 ```
 
 ---
@@ -517,10 +528,10 @@ docker-compose restart backend
 # 1. Edit code in bcm-v2-backend/src/...
 
 # 2. Rebuild and restart backend
-docker-compose up -d --build backend
+docker compose up -d --build backend
 
 # 3. View logs for errors
-docker-compose logs -f backend
+docker compose logs -f backend
 ```
 
 **Frontend changes:**
@@ -529,10 +540,10 @@ docker-compose logs -f backend
 # 1. Edit code in bcm-v2-frontend/app/... or components/...
 
 # 2. Rebuild and restart frontend
-docker-compose up -d --build frontend
+docker compose up -d --build frontend
 
 # 3. View logs
-docker-compose logs -f frontend
+docker compose logs -f frontend
 ```
 
 **Hot reload alternative (faster development):**
@@ -541,7 +552,7 @@ For rapid development, run services locally instead of in Docker:
 
 ```bash
 # Terminal 1: MySQL only in Docker
-docker-compose up -d mysql
+docker compose up -d mysql
 
 # Terminal 2: Backend locally
 cd ../bcm-v2-backend
@@ -559,19 +570,19 @@ npm run dev
 ### Remove containers but keep data
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### Remove containers AND all data (fresh start)
 
 ```bash
-docker-compose down -v
+docker compose down -v
 ```
 
 ### Remove everything including images
 
 ```bash
-docker-compose down -v --rmi all
+docker compose down -v --rmi all
 ```
 
 ### Complete Docker cleanup (all projects)

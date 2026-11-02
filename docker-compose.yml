@@ -86,6 +86,10 @@ services:
       # Semantic document search — Spring AI calls Ollama on the host
       # directly, same host.docker.internal bridge the ml service uses below.
       OLLAMA_URL: http://host.docker.internal:11434
+    extra_hosts:
+      # Docker Desktop (Windows/Mac) resolves host.docker.internal by itself;
+      # plain Docker Engine on Linux does not, and Ollama runs on the host.
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8090:8090"
     volumes:
@@ -140,6 +144,10 @@ services:
       OLLAMA_URL: http://host.docker.internal:11434
       INTERNAL_API_KEY: ${ML_INTERNAL_API_KEY:-}
       INTERNAL_CLAIMS_PUBLIC_KEY: ${INTERNAL_CLAIMS_PUBLIC_KEY:-}
+    extra_hosts:
+      # Docker Desktop (Windows/Mac) resolves host.docker.internal by itself;
+      # plain Docker Engine on Linux does not, and Ollama runs on the host.
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8000:8000"
     networks:
