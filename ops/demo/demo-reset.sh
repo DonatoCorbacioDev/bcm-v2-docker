@@ -74,8 +74,8 @@ curl -sS -o /dev/null -w "reset demo password: HTTP %{http_code}\n" -X PATCH "$B
 # 3) Purchase invoices, on the two purchase contracts looked up by number
 #    (their ids change every night).
 contract_id() { echo "SELECT id FROM contracts WHERE contract_number='$1' AND organization_id=${ORG_ID};" | mysql_root; }
-CLOUD_ID=$(contract_id NRT-2025-007)
-ADVISORY_ID=$(contract_id NRT-2025-008)
+CLOUD_ID=$(contract_id NRT-117)
+ADVISORY_ID=$(contract_id NRT-118)
 log "attaching purchase invoices to contracts $CLOUD_ID (cloud) and $ADVISORY_ID (advisory)..."
 BCM_DEMO_PASSWORD="$DEMO_PASSWORD" BCM_ADMIN_PASSWORD="$ADMIN_PW" \
   python3 "$BACKEND_DIR/scripts/seed_demo_purchase_invoices.py" --base-url "$BASE_URL" \
