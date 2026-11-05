@@ -37,6 +37,7 @@ ADMIN_PW_FILE="${ADMIN_PW_FILE:-$HOME/.bcm_demo_admin_pw}"
 BCM_DIR="${BCM_DIR:-$HOME/bcm-v2}"
 BACKEND_DIR="$BCM_DIR/bcm-v2-backend"
 MYSQL_CONTAINER="${MYSQL_CONTAINER:-bcm-mysql}"
+BACKEND_CONTAINER="${BACKEND_CONTAINER:-bcm-backend}"
 BASE_URL="${BASE_URL:-http://127.0.0.1:8090/api/v1}"
 LOG_FILE="${LOG_FILE:-$HOME/demo-reset.log}"
 
@@ -61,6 +62,17 @@ ADMIN_PW=$(cat "$ADMIN_PW_FILE")
 # 1) Dataset
 log "reseeding org $ORG_ID from seed-demo-org.sql..."
 mysql_root < "$BACKEND_DIR/sql/DML/seed-demo-org.sql"
+
+# 1b) Stored files of the demo org. The seed just deleted every contract of
+#     org $ORG_ID, and with them (ON DELETE CASCADE) their document, invoice
+#     and SEPA rows, but not the files on disk: they piled up night after
+#     night (702 invoice files for 17 invoices by 2026-11-05). Nothing points
+#     at them any more, and tonight's files are uploaded below. Same roots as
+#     LocalStorageService.deleteOrganizationFiles; ORG_ID is a fixed number
+#     at the top of this script, never input.
+log "removing org $ORG_ID stored files (orphans of the reseed)..."
+docker exec "$BACKEND_CONTAINER" sh -c \
+  "rm -rf /app/uploads/contracts/${ORG_ID} /app/uploads/invoices/${ORG_ID} /app/uploads/sepa/${ORG_ID}"
 
 # 2) Demo user: 2FA off by SQL (there's no admin API to turn off someone
 #    else's 2FA), password through the real API so it is hashed like any other.
