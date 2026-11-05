@@ -1,9 +1,9 @@
-# 🐳 BCM v2.0 - Docker Orchestration
+# 🐳 BCM — Docker Orchestration
 
-> Complete Docker Compose setup for running the Business Contracts Manager full-stack application
+> The whole BCM stack with one command on your machine, and the same compose files, with a production override and the nightly scripts, on the live server.
 
 [![CI](https://github.com/DonatoCorbacioDev/bcm-v2-docker/actions/workflows/ci.yml/badge.svg)](https://github.com/DonatoCorbacioDev/bcm-v2-docker/actions/workflows/ci.yml)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-brightgreen?logo=spring)](https://spring.io/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-brightgreen?logo=spring)](https://spring.io/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-blue?logo=mysql)](https://www.mysql.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://www.docker.com/)
@@ -13,37 +13,52 @@
 
 ## 🎯 Overview
 
-This repository contains the **Docker Compose configuration** for running the complete BCM v2.0 stack with a single command. Perfect for development, testing, and demonstration purposes.
+This repository holds the **Docker Compose configuration** of BCM, the multi-tenant contracts manager:
 
-**What it does:**
-- 🗄️ Spins up MySQL 8.0 database with persistent storage
-- 🔧 Builds and runs Spring Boot backend API
-- 🎨 Builds and runs Next.js frontend application
-- 🔗 Configures networking between all services
-- 📊 Initializes database with schema and seed data
+- **On your machine** — `docker compose up` builds and starts MySQL, Redis, the backend API, the web app and the ML service from the sibling repositories; Flyway creates the schema on the backend's first start
+- **In production** — the same file plus [`docker-compose.prod.yml`](./docker-compose.prod.yml), behind Caddy ([`Caddyfile`](./Caddyfile)), with the nightly scripts in [`ops/`](./ops): encrypted off-site backups and the public demo reset
 
-See the [bcm-v2-frontend](https://github.com/DonatoCorbacioDev/bcm-v2-frontend#-screenshots) README for screenshots of the application this stack runs.
+Live demo: [bcm.donatocorbacio.dev](https://bcm.donatocorbacio.dev) (`demo` / `BcmDemo#2026`). Screenshots in the [bcm-v2-frontend README](https://github.com/DonatoCorbacioDev/bcm-v2-frontend#-screenshots).
 
 ---
 
 ## 🏗️ Architecture
 
+### On your machine
+
 ```mermaid
-graph TB
-    subgraph DockerNet["Docker Network: bcm-network"]
-        A["Next.js Frontend<br>(Port 3000)"] -->|REST API| B["Spring Boot Backend<br>(Port 8090)"]
-        B -->|JDBC| C["MySQL 8.0<br>(Port 3307)"]
-    end
-    D[Browser] -->|HTTP| A
-    E[Developer] -->|Docker Compose| A
-    E -->|Docker Compose| B
-    E -->|Docker Compose| C
-    
-    style A fill:#64b5f6,stroke:#0d47a1,stroke-width:3px,color:#000
-    style B fill:#81c784,stroke:#1b5e20,stroke-width:3px,color:#000
-    style C fill:#ffb74d,stroke:#e65100,stroke-width:3px,color:#000
-    style D fill:#90a4ae,stroke:#263238,stroke-width:3px,color:#000
+flowchart LR
+    dev(["Browser<br/>localhost:3000"]) --> fe["frontend<br/>Next.js :3000"]
+    fe --> api["backend<br/>Spring Boot :8090"]
+    api --> db[("mysql<br/>:3307 on the host")]
+    api --> redis[("redis<br/>internal only")]
+    api -.->|optional| ml["ml<br/>FastAPI :8000"]
+    ml -.->|read only| db
+    api -.->|optional, on the host| ollama["Ollama"]
 ```
+
+### In production
+
+```mermaid
+flowchart LR
+    internet(["Internet"]) --> caddy["Caddy on the VM<br/>HTTPS, Let's Encrypt"]
+    caddy --> fe["frontend"]
+    caddy --> api["backend"]
+    subgraph data["data on the VM"]
+        db[("mysql")]
+        files[("uploads volume")]
+        redis[("redis")]
+    end
+    api --> data
+    subgraph nightly["cron on the VM, every night"]
+        backup["03:15 backup.sh<br/>dump + files, encrypted,<br/>copied off-site and verified"]
+        reset["04:15 demo-reset.sh<br/>rebuilds the demo company"]
+    end
+    backup -.-> data
+    reset -.->|SQL and the real API| api
+```
+
+Only Caddy is reachable from outside; the containers listen on `127.0.0.1`. Caddy also keeps the metrics endpoint private.
 
 ### Project Structure
 
@@ -72,8 +87,9 @@ bcm-v2/
 |---------|----------------|------|------------|-------------|
 | **MySQL** | `bcm-mysql` | `3307` | MySQL 8.0 | Database server with persistent volume |
 | **Redis** | `bcm-redis` | internal only | Redis 7 | Backs the distributed login/register rate limiter |
-| **Backend** | `bcm-backend` | `8090` | Spring Boot 3.5 + Java 21 | REST API with JWT authentication |
+| **Backend** | `bcm-backend` | `8090` | Spring Boot 4.1 + Java 21 | REST API with JWT authentication |
 | **Frontend** | `bcm-frontend` | `3000` | Next.js 16 + React 19 | Web UI with Tailwind CSS |
+| **ML** | `bcm-ml` | `8000` | Python + FastAPI | Optional: the features using it are off in the demo |
 
 **Network:** All services communicate via `bcm-network` (bridge driver)
 
@@ -90,7 +106,7 @@ Ensure you have installed:
 - ✅ `openssl` to generate the JWT secret (bundled with Git for Windows, macOS and most Linux distributions)
 - ✅ Minimum 4GB RAM available for Docker
 - ✅ 10GB free disk space
-- ✅ [Ollama](https://ollama.com/) running on the host, with `llama3.2` (clause risk analysis / agent, via `ml`) and `nomic-embed-text` (semantic document search, via `backend`) pulled — neither service runs Ollama in a container, both reach it through `host.docker.internal`
+- ➖ *Optional:* [Ollama](https://ollama.com/) on the host, only for the AI features that are off by default (semantic document search with `nomic-embed-text`, clause analysis with `llama3.2`); both services reach it through `host.docker.internal`. Without it everything else works.
 
 **Verify installation:**
 
@@ -611,26 +627,27 @@ docker builder prune -a
 
 ---
 
+## 🌐 Production
+
+How the live demo runs, on one cloud VM:
+
+| | |
+|---|---|
+| **Start** | `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build` — the override switches the backend to the `prod` profile; every port is already bound to `127.0.0.1` in the base file |
+| **HTTPS** | Caddy on the VM, certificates from Let's Encrypt; routes `/api/v1/*` to the backend and the rest to the frontend; the metrics endpoint answers only the private network |
+| **Backups** | [`ops/backup/backup.sh`](./ops/backup/backup.sh) every night: database dump and uploaded files, encrypted for a key kept off the server, copied off-site and verified byte by byte; [`restore-test.sh`](./ops/backup/restore-test.sh) proves a backup actually restores |
+| **Public demo** | [`ops/demo/demo-reset.sh`](./ops/demo/demo-reset.sh) every night: rebuilds the demo company from `seed-demo-org.sql`, removes its old files, attaches the sample invoices and contract PDF through the real API, and checks the result |
+| **Deploy** | `git pull` in the repositories, then rebuild only the service that changed (`up -d --build --no-deps backend`); Flyway migrates on start, health checks confirm |
+| **Monitoring** | External uptime checks on the site and the API, with alerts |
+
 ## 🔒 Security Notes
 
-**For Development:**
-- ✅ `.env` file is git-ignored (credentials safe)
-- ✅ Default ports are non-standard (3307 instead of 3306)
-- ✅ JWT secrets required
-- ⚠️ Containers run as root (acceptable for local dev)
-
-**Before Production Deployment:**
-
-- [ ] Use Docker secrets instead of `.env`
-- [ ] Run containers as non-root users
-- [ ] Enable TLS/SSL for all connections
-- [ ] Use private Docker registry
-- [ ] Implement health checks and restart policies
-- [ ] Set up proper logging and monitoring
-- [ ] Use orchestration (Kubernetes, Docker Swarm)
-- [ ] Implement rate limiting
-- [ ] Set up automated backups
-- [ ] Review and harden container images
+- ✅ Containers run as non-root users (`spring`, `nextjs`, `ml`)
+- ✅ Secrets only in `.env`, git-ignored; `.env.example` holds no real values
+- ✅ In production only Caddy is exposed, with TLS; containers listen on `127.0.0.1`
+- ✅ Health checks and restart policies on every service
+- ✅ Encrypted, verified off-site backups; rate limiting on login and registration (Redis)
+- ⚠️ Still open: secrets in `.env` rather than a secrets manager, a single VM (no orchestration, no failover), no container resource limits — see [SECURITY.md](./SECURITY.md)
 
 ---
 
@@ -638,7 +655,7 @@ docker builder prune -a
 
 ### Related Repositories
 
-- **Backend:** [bcm-v2-backend](https://github.com/DonatoCorbacioDev/bcm-v2-backend) - Spring Boot REST API with 100% test coverage
+- **Backend:** [bcm-v2-backend](https://github.com/DonatoCorbacioDev/bcm-v2-backend) - Spring Boot REST API, with the product story and the architecture
 - **Frontend:** [bcm-v2-frontend](https://github.com/DonatoCorbacioDev/bcm-v2-frontend) - Next.js web application
 - **ML service:** [bcm-v2-ml](https://github.com/DonatoCorbacioDev/bcm-v2-ml) - FastAPI service for risk scoring, forecasting, anomaly detection and LLM-based clause analysis
 
@@ -688,6 +705,6 @@ Thanks to:
 - Database initialization automation via Flyway on backend startup
 - Named volumes for data persistence across `docker compose down`
 
-This compose file is explicitly dev-only, not production-ready as-is — see `SECURITY.md` in this repo for the concrete gap list (TLS, secrets management, resource limits) before running it anywhere reachable outside your own machine.
+The base compose file is meant for your machine; production adds `docker-compose.prod.yml`, Caddy and the `ops/` scripts (see [Production](#-production)). What is still open is listed in `SECURITY.md`.
 
 **💬 Questions?** Open an issue or reach out via email!
