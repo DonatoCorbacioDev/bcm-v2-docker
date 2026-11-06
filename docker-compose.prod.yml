@@ -15,6 +15,10 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_BASE_URL: https://bcm.donatocorbacio.dev
       BACKEND_BASE_URL: https://bcm.donatocorbacio.dev/api/v1
+      # The public demo login (printed on the landing page) can't change its
+      # password, turn on two-factor, pay invoices or edit their bank details:
+      # it is shared by every visitor. demo-reset.sh sets the password as admin.
+      BCM_DEMO_LOCKED_USERNAME: demo
       # Ollama runs on the VM host itself (no GPU, ARM CPU). Linux Docker has
       # no automatic host.docker.internal DNS like Docker Desktop — this
       # extra_hosts entry is what makes the name resolve here.
