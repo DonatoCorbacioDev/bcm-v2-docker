@@ -33,7 +33,11 @@ bcm.donatocorbacio.dev {
 		respond 403
 	}
 	handle /api/v1/* {
-		reverse_proxy 127.0.0.1:8090
+		# Spring Security sends its own, weaker HSTS header (1 year, no
+		# preload); drop it so API responses carry only the site-wide one above.
+		reverse_proxy 127.0.0.1:8090 {
+			header_down -Strict-Transport-Security
+		}
 	}
 	handle {
 		reverse_proxy 127.0.0.1:3000
