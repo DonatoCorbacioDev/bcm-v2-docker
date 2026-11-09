@@ -139,7 +139,10 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      DB_URL: mysql+pymysql://${DB_USERNAME:-bcm_user}:${DB_PASSWORD:-bcm_password}@mysql:3306/bcm
+      # Its own read-only account when ML_DB_USERNAME/ML_DB_PASSWORD are set
+      # (ops/mysql/create-ml-readonly-user.sh); the backend's account otherwise,
+      # so a fresh local setup keeps working without the extra step.
+      DB_URL: mysql+pymysql://${ML_DB_USERNAME:-${DB_USERNAME:-bcm_user}}:${ML_DB_PASSWORD:-${DB_PASSWORD:-bcm_password}}@mysql:3306/bcm
       CORS_ORIGINS: http://localhost:3000
       OLLAMA_URL: http://host.docker.internal:11434
       INTERNAL_API_KEY: ${ML_INTERNAL_API_KEY:-}
