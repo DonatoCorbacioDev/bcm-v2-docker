@@ -637,6 +637,8 @@ How the live demo runs, on one cloud VM:
 | **HTTPS** | Caddy on the VM, certificates from Let's Encrypt; routes `/api/v1/*` to the backend and the rest to the frontend; the metrics endpoint answers only the private network |
 | **Backups** | [`ops/backup/backup.sh`](./ops/backup/backup.sh) every night: database dump and uploaded files, encrypted for a key kept off the server, copied off-site and verified byte by byte; [`restore-test.sh`](./ops/backup/restore-test.sh) proves a backup actually restores |
 | **Public demo** | [`ops/demo/demo-reset.sh`](./ops/demo/demo-reset.sh) every night: rebuilds the demo company from `seed-demo-org.sql`, removes its old files, attaches the sample invoices and contract PDF through the real API, and checks the result |
+| **ML database account** | [`ops/mysql/create-ml-readonly-user.sh`](./ops/mysql/create-ml-readonly-user.sh), once: the ML service reads through its own account with `SELECT` on three tables only |
+| **Tenant isolation check** | [`ops/smoke/bola_two_orgs.py`](./ops/smoke/bola_two_orgs.py) registers two organizations and two managers on a dev-profile stack and tries every cross-organization and cross-manager access over plain HTTP; it runs in CI on every push. Never against production |
 | **Deploy** | `git pull` in the repositories, then rebuild only the service that changed (`up -d --build --no-deps backend`); Flyway migrates on start, health checks confirm |
 | **Monitoring** | External uptime checks on the site and the API, with alerts |
 
