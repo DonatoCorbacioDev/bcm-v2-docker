@@ -25,10 +25,10 @@
 #   - "demo" is the public account; its password is printed on the login page
 #     on purpose, so it is not a secret
 #
-# Idempotent and safe to re-run by hand. Scoped to org id 3 only.
+# Idempotent and safe to re-run by hand. Scoped to the demo organization only
+# (slug nortiva-solutions; numeric id 3 before ids became UUIDs, ADR-0009).
 set -euo pipefail
 
-ORG_ID=3
 DEMO_USERNAME="demo"
 DEMO_PASSWORD="BcmDemo#2026"
 ADMIN_USERNAME="demo_admin"
@@ -60,32 +60,53 @@ log "=== demo reset starting ==="
 ADMIN_PW=$(cat "$ADMIN_PW_FILE")
 
 # 1) Dataset
-log "reseeding org $ORG_ID from seed-demo-org.sql..."
+log "reseeding the demo organization from seed-demo-org.sql..."
 mysql_root < "$BACKEND_DIR/sql/DML/seed-demo-org.sql"
+
+# 1a) The demo organization, found the way the seed finds it: ids are UUIDs
+#     (ADR-0009), so not a number written here. It must be a well-formed UUID
+#     before anything below uses it: an empty value would turn the rm -rf of
+#     step 1b into the upload folders of every organization.
+UUID_RE='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+ORG_ID=$(echo "SELECT id FROM organizations WHERE slug='nortiva-solutions' OR legacy_id=3 ORDER BY (slug='nortiva-solutions') DESC LIMIT 1;" | mysql_root)
+if ! [[ "$ORG_ID" =~ $UUID_RE ]]; then
+  log "ERROR: demo organization not found (got '${ORG_ID}'): stopping, nothing removed"
+  exit 1
+fi
+# Its numeric id from before V55, if any: files uploaded back then live under it.
+LEGACY_ORG_ID=$(echo "SELECT COALESCE(legacy_id, '') FROM organizations WHERE id='${ORG_ID}';" | mysql_root)
+if [[ -n "$LEGACY_ORG_ID" && ! "$LEGACY_ORG_ID" =~ ^[1-9][0-9]*$ ]]; then
+  log "ERROR: unexpected legacy id '${LEGACY_ORG_ID}': stopping, nothing removed"
+  exit 1
+fi
+log "demo organization: ${ORG_ID}${LEGACY_ORG_ID:+ (legacy id ${LEGACY_ORG_ID})}"
 
 # 1b) Stored files of the demo org. The seed just deleted every contract of
 #     org $ORG_ID, and with them (ON DELETE CASCADE) their document, invoice
 #     and SEPA rows, but not the files on disk: they piled up night after
 #     night (702 invoice files for 17 invoices by 2026-11-05). Nothing points
 #     at them any more, and tonight's files are uploaded below. Same roots as
-#     LocalStorageService.deleteOrganizationFiles; ORG_ID is a fixed number
-#     at the top of this script, never input.
-log "removing org $ORG_ID stored files (orphans of the reseed)..."
-docker exec "$BACKEND_CONTAINER" sh -c \
-  "rm -rf /app/uploads/contracts/${ORG_ID} /app/uploads/invoices/${ORG_ID} /app/uploads/sepa/${ORG_ID}"
+#     LocalStorageService.deleteOrganizationFiles, under the organization's
+#     UUID and under its pre-V55 numeric id (both validated in step 1a).
+log "removing the demo organization's stored files (orphans of the reseed)..."
+DIRS=""
+for name in "$ORG_ID" $LEGACY_ORG_ID; do
+  DIRS="$DIRS /app/uploads/contracts/${name} /app/uploads/invoices/${name} /app/uploads/sepa/${name}"
+done
+docker exec "$BACKEND_CONTAINER" sh -c "rm -rf ${DIRS}"
 
 # 2) Demo user: 2FA off by SQL (there's no admin API to turn off someone
 #    else's 2FA), password through the real API so it is hashed like any other.
-echo "UPDATE users SET totp_enabled=0, totp_secret_encrypted=NULL WHERE username='${DEMO_USERNAME}' AND organization_id=${ORG_ID};" | mysql_root
+echo "UPDATE users SET totp_enabled=0, totp_secret_encrypted=NULL WHERE username='${DEMO_USERNAME}' AND organization_id='${ORG_ID}';" | mysql_root
 ADMIN_TOKEN=$(login "$ADMIN_USERNAME" "$ADMIN_PW")
-DEMO_USER_ID=$(echo "SELECT id FROM users WHERE username='${DEMO_USERNAME}' AND organization_id=${ORG_ID};" | mysql_root)
+DEMO_USER_ID=$(echo "SELECT id FROM users WHERE username='${DEMO_USERNAME}' AND organization_id='${ORG_ID}';" | mysql_root)
 curl -sS -o /dev/null -w "reset demo password: HTTP %{http_code}\n" -X PATCH "$BASE_URL/users/${DEMO_USER_ID}" \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" \
   -d "$(python3 -c 'import json,sys; print(json.dumps({"password": sys.argv[1]}))' "$DEMO_PASSWORD")"
 
 # 3) Purchase invoices, on the two purchase contracts looked up by number
 #    (their ids change every night).
-contract_id() { echo "SELECT id FROM contracts WHERE contract_number='$1' AND organization_id=${ORG_ID};" | mysql_root; }
+contract_id() { echo "SELECT id FROM contracts WHERE contract_number='$1' AND organization_id='${ORG_ID}';" | mysql_root; }
 CLOUD_ID=$(contract_id NRT-117)
 ADVISORY_ID=$(contract_id NRT-118)
 log "attaching purchase invoices to contracts $CLOUD_ID (cloud) and $ADVISORY_ID (advisory)..."

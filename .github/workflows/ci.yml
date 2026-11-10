@@ -163,7 +163,7 @@ jobs:
       - name: Upgrade the org to PRO via the internal endpoint
         run: |
           ORG_ID=$(curl -sf -H "Authorization: Bearer ${{ steps.register.outputs.token }}" \
-            "$API_BASE/organizations/me" | jq -e '.id')
+            "$API_BASE/organizations/me" | jq -er '.id')
           curl -sf -X PUT "$API_BASE/internal/organizations/$ORG_ID/tier" \
             -H "X-Internal-Admin-Key: $INTERNAL_ADMIN_API_KEY" \
             -H "Content-Type: application/json" \
