@@ -65,7 +65,7 @@ services:
       # INSECURE DEFAULT — dev only. Override JWT_SECRET in .env for anything
       # beyond a throwaway local stack.
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-min-256-bits}
-      JWT_EXPIRATION_MS: 86400000
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-900000}
       SPRING_PROFILES_ACTIVE: dev
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
