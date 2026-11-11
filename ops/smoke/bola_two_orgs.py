@@ -21,7 +21,11 @@ at production: it creates organizations and depends on dev-only email logging.
 Standard library only; safe to run repeatedly (every run uses fresh names).
 """
 
+import base64
+import hashlib
+import hmac
 import json
+import struct
 import os
 import re
 import subprocess
@@ -129,7 +133,21 @@ def register(label):
     })
     confirmed = must("POST", "/organizations/register/confirm",
                      body={"registrationId": started["registrationId"], "code": registration_code(email)})
-    return confirmed["token"]
+    # A new admin gets no session until 2FA is set up (backend TwoFactorPolicy).
+    if not confirmed.get("mfaSetupRequired"):
+        sys.exit(f"SETUP FAILED: a new admin got a session without 2FA: {confirmed}")
+    setup_token = confirmed["setupToken"]
+    secret = must("POST", "/auth/2fa/enroll/setup", body={"setupToken": setup_token})["secret"]
+    enrolled = must("POST", "/auth/2fa/enroll/confirm", body={"setupToken": setup_token, "code": totp(secret)})
+    return enrolled["token"]
+
+
+def totp(secret_base32):
+    """The current RFC 6238 code (SHA-1, 6 digits, 30 s), as an authenticator app shows it."""
+    key = base64.b32decode(secret_base32 + "=" * (-len(secret_base32) % 8), casefold=True)
+    digest = hmac.new(key, struct.pack(">Q", int(time.time()) // 30), hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    return "%06d" % ((struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF) % 1_000_000)
 
 
 def login(username):

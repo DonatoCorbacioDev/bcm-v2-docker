@@ -19,6 +19,9 @@ services:
       # password, turn on two-factor, pay invoices or edit their bank details:
       # it is shared by every visitor. demo-reset.sh sets the password as admin.
       BCM_DEMO_LOCKED_USERNAME: demo
+      # Every ADMIN must turn on 2FA before getting a session, except the demo's
+      # internal admin: demo-reset.sh signs in as it with a password, every night.
+      BCM_2FA_EXEMPT_USERNAMES: demo_admin
       # Ollama runs on the VM host itself (no GPU, ARM CPU). Linux Docker has
       # no automatic host.docker.internal DNS like Docker Desktop — this
       # extra_hosts entry is what makes the name resolve here.
