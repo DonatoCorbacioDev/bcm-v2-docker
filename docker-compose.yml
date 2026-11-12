@@ -84,6 +84,8 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      # Weekly abuse report (SecurityReportService); empty sends none.
+      OPS_REPORT_EMAIL: ${OPS_REPORT_EMAIL:-}
       FRONTEND_BASE_URL: http://localhost:3000
       BACKEND_BASE_URL: http://localhost:8090/api/v1
       UPLOAD_DIR: /app/uploads
