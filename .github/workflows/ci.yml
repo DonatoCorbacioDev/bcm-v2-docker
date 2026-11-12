@@ -146,10 +146,27 @@ jobs:
           RESPONSE=$(curl -sf -X POST "$API_BASE/organizations/register/confirm" \
             -H "Content-Type: application/json" \
             -d "{\"registrationId\": \"$REGISTRATION_ID\", \"code\": \"$CODE\"}")
-          TOKEN=$(echo "$RESPONSE" | jq -r '.token')
+          # A new admin gets no session until 2FA is set up (TwoFactorPolicy,
+          # 2026-11-11): only a setup token, exchanged below for the session.
+          SETUP_TOKEN=$(echo "$RESPONSE" | jq -er 'select(.mfaSetupRequired == true and .token == null) | .setupToken') || {
+            echo "A new admin did not get the required 2FA setup instead of a session."
+            exit 1
+          }
+          echo "::add-mask::$SETUP_TOKEN"
+          SECRET=$(curl -sf -X POST "$API_BASE/auth/2fa/enroll/setup" \
+            -H "Content-Type: application/json" \
+            -d "{\"setupToken\": \"$SETUP_TOKEN\"}" | jq -er '.secret')
+          echo "::add-mask::$SECRET"
+          # The current RFC 6238 code, as an authenticator app shows it.
+          TOTP=$(python3 -c 'import base64,hashlib,hmac,struct,sys,time
+          k=base64.b32decode(sys.argv[1]+"="*(-len(sys.argv[1])%8),casefold=True)
+          d=hmac.new(k,struct.pack(">Q",int(time.time())//30),hashlib.sha1).digest();o=d[-1]&15
+          print("%06d"%((struct.unpack(">I",d[o:o+4])[0]&0x7FFFFFFF)%1000000))' "$SECRET")
+          TOKEN=$(curl -sf -X POST "$API_BASE/auth/2fa/enroll/confirm" \
+            -H "Content-Type: application/json" \
+            -d "{\"setupToken\": \"$SETUP_TOKEN\", \"code\": \"$TOTP\"}" | jq -r '.token')
           if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-            echo "Organization registration did not return an access token:"
-            echo "$RESPONSE"
+            echo "The 2FA setup did not return an access token."
             exit 1
           fi
           echo "::add-mask::$TOKEN"
