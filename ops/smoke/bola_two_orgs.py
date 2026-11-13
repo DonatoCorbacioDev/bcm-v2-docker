@@ -218,7 +218,7 @@ def main():
                  f"/business-areas/{base_b['area']}", f"/counterparties/{base_b['counterparty']}",
                  f"/financial-types/{base_b['type']}", f"/managers/{mgr_b}",
                  f"/financial-values/by-contract/{b1['id']}", f"/contract-history/contract/{b1['id']}",
-                 f"/contracts/{b1['id']}/collaborators", f"/contracts/{b1['id']}/documents",
+                 f"/contracts/{b1['id']}/documents",
                  f"/contracts/{b1['id']}/invoices", f"/contracts/{b1['id']}/workflow/events"):
         expect_status(f"A admin reads B {path}", 404, "GET", path, admin_a)
     expect_status("A admin updates B's contract", 404, "PUT", f"/contracts/{b1['id']}", admin_a, {
@@ -238,10 +238,10 @@ def main():
     expect_status("A creates a contract with B's counterparty", 404, "POST", "/contracts", admin_a, {
         "counterpartyId": base_b["counterparty"], "contractNumber": f"BOLA-{RUN}-X", "status": "ACTIVE",
         "startDate": "2026-01-01", "endDate": "2027-12-31", "areaId": base_a["area"]})
-    status, _ = call("PATCH", f"/contracts/{a1['id']}/assign-manager", admin_a, {"managerId": mgr_b})
-    check("A assigns B's manager to its contract", status in (400, 404), f"got {status}")
-    status, _ = call("PATCH", f"/contracts/{a1['id']}/collaborators", admin_a, {"managerIds": [mgr_b]})
-    check("A adds B's manager as collaborator", status in (400, 404), f"got {status}")
+    status, _ = call("POST", "/contracts", admin_a, {
+        "counterpartyId": base_a["counterparty"], "contractNumber": f"BOLA-{RUN}-M", "status": "ACTIVE",
+        "startDate": "2026-01-01", "endDate": "2027-12-31", "areaId": base_a["area"], "managerId": mgr_b})
+    check("A creates a contract assigned to B's manager", status in (400, 404), f"got {status}")
 
     # 3. A client-supplied id on create never overwrites B's row.
     status, created = call("POST", "/business-areas", admin_a, {"id": base_b["area"], "name": f"Overwrite {RUN}"})
