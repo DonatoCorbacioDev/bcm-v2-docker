@@ -18,8 +18,13 @@ jobs:
       - name: Create dummy build context directories
         run: mkdir -p ../bcm-v2-backend ../bcm-v2-frontend
 
-      - name: Validate docker-compose.yml syntax
-        run: docker compose config --quiet
+      # Both the local stack and the one production really runs: the
+      # production overrides merged on top (OWASP API8, configuration checked
+      # before it is deployed).
+      - name: Validate docker-compose.yml, alone and with the production overrides
+        run: |
+          docker compose config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
         env:
           DB_ROOT_PASSWORD: ci-test
           DB_USERNAME: ci-user
@@ -29,6 +34,12 @@ jobs:
           MAIL_PORT: "587"
           MAIL_USERNAME: test@test.com
           MAIL_PASSWORD: test
+
+      # The VM's reverse proxy config: a typo there takes the site down on reload.
+      - name: Validate the Caddyfile
+        run: >-
+          docker run --rm -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.10.2
+          caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
   smoke-test:
     name: Smoke Test (MySQL + Backend + ML)
@@ -190,6 +201,14 @@ jobs:
         run: |
           curl -sf -H "Authorization: Bearer ${{ steps.register.outputs.token }}" \
             "$API_BASE/forecast?months=3" | jq -e '.historical'
+
+      # OWASP API8: an error of a signed-in user keeps its status. It used to
+      # reach the client as a 401, and the frontend logs out on any 401.
+      - name: A signed-in user's unknown path answers 404, not 401
+        run: |
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}'             -H "Authorization: Bearer ${{ steps.register.outputs.token }}" "$API_BASE/nonexistent")
+          echo "GET /nonexistent -> $STATUS"
+          [ "$STATUS" = "404" ]
 
       # OWASP API1 from the outside: two freshly registered organizations and
       # two managers, plain HTTP with real logins. One FAIL line fails the job.
