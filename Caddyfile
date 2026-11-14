@@ -12,6 +12,11 @@
 
 bcm.donatocorbacio.dev {
 	header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+	# The proxy adds "Via: 1.1 Caddy" to every answer: it tells an attacker
+	# which software to look up vulnerabilities for and serves no client
+	# (OWASP REST Security Cheat Sheet). Removing a header is deferred by
+	# Caddy until the response is written, so it also covers proxied answers.
+	header -Via
 
 	# /actuator/prometheus leaks internal request patterns/endpoint names
 	# (see docs/SECURITY.md checklist) and has no scraper wired yet, so it's
