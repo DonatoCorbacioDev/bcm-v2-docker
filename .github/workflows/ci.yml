@@ -29,6 +29,11 @@ jobs:
           DB_ROOT_PASSWORD: ci-test
           DB_USERNAME: ci-user
           DB_PASSWORD: ci-password
+          # Required by the production overrides, like the secrets around them.
+          DB_APP_USERNAME: ci_app
+          DB_APP_PASSWORD: ci-app-password
+          ML_DB_USERNAME: ci_ml_ro
+          ML_DB_PASSWORD: ci-ml-password
           JWT_SECRET: ci-secret-key-for-validation-only-not-real-min-256-bits
           MAIL_HOST: smtp.gmail.com
           MAIL_PORT: "587"

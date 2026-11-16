@@ -33,7 +33,10 @@ services:
     networks:
       - bcm-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-rootpassword123}"]
+      # Reads the root password inside the container ($$ is a literal $ for
+      # compose), so it is never written into the container's configuration,
+      # where `docker inspect` would show it, nor on a command line.
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h localhost -u root --silent"]
       interval: 10s
       timeout: 5s
       retries: 5

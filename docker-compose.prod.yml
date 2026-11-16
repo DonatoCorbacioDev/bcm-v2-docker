@@ -3,8 +3,17 @@
 
 # Production overrides for bcm-prod (Oracle VM, 2 OCPU/12GB).
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Secrets are required here (${VAR:?...}): docker-compose.yml falls back to
+# public example values so a laptop starts with no setup, and production must
+# never start on one of them by mistake. A missing variable stops the command
+# and names it.
 services:
   mysql:
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+      MYSQL_USER: ${DB_USERNAME:?set DB_USERNAME in .env}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
     deploy:
       resources:
         limits:
@@ -12,6 +21,13 @@ services:
 
   backend:
     environment:
+      # Owner account (Flyway only) and the row-only one the backend runs with
+      # (ops/mysql/create-app-runtime-user.sh).
+      DB_USERNAME: ${DB_USERNAME:?set DB_USERNAME in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      DB_APP_USERNAME: ${DB_APP_USERNAME:?run ops/mysql/create-app-runtime-user.sh}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?run ops/mysql/create-app-runtime-user.sh}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_BASE_URL: https://bcm.donatocorbacio.dev
       BACKEND_BASE_URL: https://bcm.donatocorbacio.dev/api/v1
@@ -46,6 +62,8 @@ services:
 
   ml:
     environment:
+      # Its read-only account (ops/mysql/create-ml-readonly-user.sh), never the backend's.
+      DB_URL: mysql+pymysql://${ML_DB_USERNAME:?run ops/mysql/create-ml-readonly-user.sh}:${ML_DB_PASSWORD:?run ops/mysql/create-ml-readonly-user.sh}@mysql:3306/bcm
       # Refuses to start without INTERNAL_API_KEY and INTERNAL_CLAIMS_PUBLIC_KEY.
       ENVIRONMENT: production
       CORS_ORIGINS: https://bcm.donatocorbacio.dev
