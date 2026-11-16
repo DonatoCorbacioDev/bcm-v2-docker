@@ -70,8 +70,14 @@ services:
         condition: service_healthy
     environment:
       DB_URL: jdbc:mysql://mysql:3306/bcm?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      # Owner account: Flyway only, to apply the migrations at startup.
       DB_USERNAME: ${DB_USERNAME:-bcm_user}
       DB_PASSWORD: ${DB_PASSWORD:-bcm_password}
+      # The account the backend runs with: rows only (SELECT, INSERT, UPDATE,
+      # DELETE), created by ops/mysql/create-app-runtime-user.sh. Without it
+      # the owner account is used, so a fresh local setup keeps working.
+      DB_APP_USERNAME: ${DB_APP_USERNAME:-${DB_USERNAME:-bcm_user}}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:-${DB_PASSWORD:-bcm_password}}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       # INSECURE DEFAULT — dev only. Override JWT_SECRET in .env for anything
