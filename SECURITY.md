@@ -20,7 +20,7 @@ This repository contains the Docker Compose configuration for the BCM v2.0 appli
 ### Current Implementation
 
 #### Container Security
-- ✅ **Environment Variables** - Secrets in `.env` (git-ignored)
+- ✅ **Docker secrets in production** - One file per secret in `secrets/` (directory `700`, files `444`, git-ignored), mounted at `/run/secrets/<NAME>` only in the containers that use it; no secret in any container's environment (`docker-compose.prod.yml`). Locally, `.env` (git-ignored)
 - ✅ **Network Isolation** - Custom bridge network `bcm-network`
 - ✅ **Non-default Ports** - MySQL on 3307 (not standard 3306)
 - ✅ **Volume Permissions** - Data persisted in named volumes
@@ -41,7 +41,6 @@ This is a **development/demonstration** configuration. The following should be a
 
 - ⚠️ **No resource limits** - Containers can consume all system resources
 - ⚠️ **Bind mounts** - SQL init scripts mounted from host filesystem
-- ⚠️ **No secrets management** - Using `.env` file instead of Docker secrets
 - ⚠️ **No TLS/SSL** - HTTP only (HTTPS should be enforced in production)
 
 ---
@@ -127,24 +126,10 @@ networks:
 
 ### Secrets Management
 
-- [ ] **Docker Secrets** - Instead of environment variables
-```yaml
-secrets:
-  db_password:
-    external: true
-  jwt_secret:
-    external: true
-
-services:
-  backend:
-    secrets:
-      - db_password
-      - jwt_secret
-```
-
-- [ ] **Secrets Provider** - HashiCorp Vault, AWS Secrets Manager
-- [ ] **Rotate secrets** - Regular rotation schedule
-- [ ] **Encrypt at rest** - Use Docker secret encryption
+- [x] **Docker Secrets** - Instead of environment variables, in production since 2026-11-17: `docker-compose.prod.yml` (file-based secrets, `!reset` on the development variables), moved from `.env` once with `ops/secrets/move-secrets-from-env.sh`; the ops scripts read and write them through `ops/secrets/lib.sh`
+- [x] **Rotate secrets** - Procedure per secret in the backend's `docs/SECURITY.md` ("Secret rotation and revocation")
+- [ ] **Secrets Provider** - HashiCorp Vault, AWS Secrets Manager: not for a single VM with one administrator (one more service to run and secure)
+- [ ] **Encrypt at rest** - The secret files are plain files on the VM's disk, like `.env` was; Docker encrypts secrets only in Swarm mode
 
 ### Images
 

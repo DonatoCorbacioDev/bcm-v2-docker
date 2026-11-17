@@ -21,7 +21,8 @@
 #   --compare-backend <container>    number of files and total bytes in uploads
 #
 # DISASTER RECOVERY (real restore on a fresh host): start the stack with
-# docker compose so MySQL creates the application user from .env, then run
+# docker compose so MySQL creates the application user from .env and the
+# Docker secrets in secrets/ (keep a copy of both off the host), then run
 # the same decrypt pipeline into the real container instead of the throwaway:
 #   age -d -i KEY bcm-db-<stamp>.sql.gz.age | gunzip | docker exec -i bcm-mysql mysql -uroot -p
 #   age -d -i KEY bcm-uploads-<stamp>.tar.gz.age | tar -xz -C <dir>  (then copy into the uploads volume)
@@ -79,7 +80,7 @@ tmp="$(mktemp -d)"
 # credentials passes through this script.
 table_counts() {
   docker exec "$1" sh -c '
-    export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"
+    MYSQL_PWD="$(cat /run/secrets/DB_ROOT_PASSWORD 2>/dev/null || printf %s "$MYSQL_ROOT_PASSWORD")"; export MYSQL_PWD
     for t in $(mysql -uroot -N -B -e "SELECT table_name FROM information_schema.tables WHERE table_schema=\"$0\" AND table_type=\"BASE TABLE\""); do
       printf "%s\t%s\n" "$t" "$(mysql -uroot -N -B -e "SELECT COUNT(*) FROM \`$0\`.\`$t\`")"
     done' "$2" | sort

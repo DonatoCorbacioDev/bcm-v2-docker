@@ -98,10 +98,11 @@ flock -n 9 || die "another backup is already running"
 tmp="$(mktemp -d "$BACKUP_DIR/.tmp.XXXXXX")"
 
 log "dumping database '$DB_NAME' from $MYSQL_CONTAINER"
-# The root password is read from the container's own environment inside the
-# container, so it never appears on this host's command line or in this script.
+# The root password is read inside the container, from its Docker secret
+# (its environment on a laptop), so it never appears on this host's command
+# line or in this script.
 docker exec "$MYSQL_CONTAINER" sh -c '
-  MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump --user=root \
+  MYSQL_PWD="$(cat /run/secrets/DB_ROOT_PASSWORD 2>/dev/null || printf %s "$MYSQL_ROOT_PASSWORD")" exec mysqldump --user=root \
     --single-transaction --quick --routines --triggers --events --hex-blob \
     --default-character-set=utf8mb4 --set-gtid-purged=OFF --databases "$1"' \
   sh "$DB_NAME" | gzip -9 > "$tmp/db.sql.gz"

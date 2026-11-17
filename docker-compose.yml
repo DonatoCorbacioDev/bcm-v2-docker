@@ -22,10 +22,12 @@ services:
     logging: *default-logging
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      # Empty defaults: in production these come from Docker secrets instead
+      # (docker-compose.prod.yml), and .env no longer has them.
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-}
       MYSQL_DATABASE: bcm
       MYSQL_USER: ${DB_USERNAME}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-}
     ports:
       - "127.0.0.1:3307:3306"
     volumes:
@@ -35,8 +37,9 @@ services:
     healthcheck:
       # Reads the root password inside the container ($$ is a literal $ for
       # compose), so it is never written into the container's configuration,
-      # where `docker inspect` would show it, nor on a command line.
-      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h localhost -u root --silent"]
+      # where `docker inspect` would show it, nor on a command line: from the
+      # Docker secret in production, from the variable on a laptop.
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$(cat /run/secrets/DB_ROOT_PASSWORD 2>/dev/null || printf %s \"$$MYSQL_ROOT_PASSWORD\")\" mysqladmin ping -h localhost -u root --silent"]
       interval: 10s
       timeout: 5s
       retries: 5

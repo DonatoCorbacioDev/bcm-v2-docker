@@ -649,12 +649,12 @@ How the live demo runs, on one cloud VM:
 ## 🔒 Security Notes
 
 - ✅ Containers run as non-root users (`spring`, `nextjs`, `ml`)
-- ✅ Secrets only in `.env`, git-ignored; `.env.example` holds no real values
+- ✅ In production every secret is a Docker secret (`secrets/`, one file each, git-ignored), never a container environment variable; `.env.example` holds no real values
 - ✅ In production only Caddy is exposed, with TLS; containers listen on `127.0.0.1`
 - ✅ Health checks and restart policies on every service
 - ✅ Encrypted, verified off-site backups; rate limiting on login and registration (Redis)
 - ✅ Every uploaded file scanned by ClamAV before the backend reads or stores it; Caddy refuses API bodies over 11 MB
-- ⚠️ Still open: secrets in `.env` rather than a secrets manager, a single VM (no orchestration, no failover), no container resource limits — see [SECURITY.md](./SECURITY.md)
+- ⚠️ Still open: no secrets manager (Vault, KMS), a single VM (no orchestration, no failover) — see [SECURITY.md](./SECURITY.md)
 
 ---
 
@@ -708,7 +708,7 @@ Thanks to:
 
 **⭐ If you're a recruiter or technical reviewer**, this Docker setup demonstrates:
 - Multi-service orchestration (MySQL, backend, frontend, ML) with health checks and dependency ordering
-- Non-root containers and environment-based secrets (`.env`, git-ignored)
+- Non-root containers and Docker secrets in production (files in `/run/secrets`, never environment variables)
 - Database initialization automation via Flyway on backend startup
 - Named volumes for data persistence across `docker compose down`
 

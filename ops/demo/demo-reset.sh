@@ -43,10 +43,11 @@ LOG_FILE="${LOG_FILE:-$HOME/demo-reset.log}"
 
 log() { echo "[$(date -u +%FT%TZ)] $*"; }
 
-# SQL as root, authenticated inside the container: no password on this host.
+# SQL as root, authenticated inside the container (its Docker secret): no
+# password on this host.
 mysql_root() {
   docker exec -i "$MYSQL_CONTAINER" sh -c \
-    'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -N --default-character-set=utf8mb4 -u root bcm'
+    'MYSQL_PWD="$(cat /run/secrets/DB_ROOT_PASSWORD 2>/dev/null || printf %s "$MYSQL_ROOT_PASSWORD")" exec mysql -N --default-character-set=utf8mb4 -u root bcm'
 }
 
 login() { # username password -> JWT on stdout

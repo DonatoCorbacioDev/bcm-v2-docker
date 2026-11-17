@@ -17,3 +17,5 @@ scripts/
 # OS
 .DS_Store
 Thumbs.db
+# Docker secrets of production (one file each, see docker-compose.prod.yml)
+/secrets/

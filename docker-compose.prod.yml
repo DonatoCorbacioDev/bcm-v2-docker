@@ -4,16 +4,58 @@
 # Production overrides for bcm-prod (Oracle VM, 2 OCPU/12GB).
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
-# Secrets are required here (${VAR:?...}): docker-compose.yml falls back to
-# public example values so a laptop starts with no setup, and production must
-# never start on one of them by mistake. A missing variable stops the command
-# and names it.
+# Secrets are Docker secrets here (OWASP Secrets Management Cheat Sheet): one
+# file each in ./secrets (directory 700, files 444, never in Git), mounted
+# read-only at /run/secrets/<NAME> in the containers that need it and nowhere
+# else, never environment variables, which `docker inspect` and every child
+# process would see. A missing file stops the command and names it.
+# ops/secrets/move-secrets-from-env.sh moved them there from .env once.
+# docker-compose.yml passes the same secrets as variables, with public
+# example values, so a laptop starts with no setup: `!reset` removes those
+# variables here, otherwise even an empty one would win over the file.
+# Names and settings that are not secret stay in .env (${VAR:?...}).
+secrets:
+  DB_ROOT_PASSWORD:
+    file: ./secrets/DB_ROOT_PASSWORD
+  DB_PASSWORD:
+    file: ./secrets/DB_PASSWORD
+  DB_APP_PASSWORD:
+    file: ./secrets/DB_APP_PASSWORD
+  ML_DB_URL:
+    file: ./secrets/ML_DB_URL
+  JWT_SECRET:
+    file: ./secrets/JWT_SECRET
+  JWT_SECRET_PREVIOUS:
+    file: ./secrets/JWT_SECRET_PREVIOUS
+  TOTP_ENCRYPTION_KEY:
+    file: ./secrets/TOTP_ENCRYPTION_KEY
+  MAIL_PASSWORD:
+    file: ./secrets/MAIL_PASSWORD
+  ML_INTERNAL_API_KEY:
+    file: ./secrets/ML_INTERNAL_API_KEY
+  ML_CLAIMS_PRIVATE_KEY:
+    file: ./secrets/ML_CLAIMS_PRIVATE_KEY
+  # Empty files while unused: an empty INTERNAL_ADMIN_API_KEY disables the
+  # /internal endpoints, and checkout is off without the Stripe keys.
+  INTERNAL_ADMIN_API_KEY:
+    file: ./secrets/INTERNAL_ADMIN_API_KEY
+  STRIPE_SECRET_KEY:
+    file: ./secrets/STRIPE_SECRET_KEY
+  STRIPE_WEBHOOK_SECRET:
+    file: ./secrets/STRIPE_WEBHOOK_SECRET
+
 services:
   mysql:
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+      # The image reads the *_FILE variants; it refuses both forms at once.
+      MYSQL_ROOT_PASSWORD: !reset null
+      MYSQL_PASSWORD: !reset null
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/DB_ROOT_PASSWORD
+      MYSQL_PASSWORD_FILE: /run/secrets/DB_PASSWORD
       MYSQL_USER: ${DB_USERNAME:?set DB_USERNAME in .env}
-      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    secrets:
+      - DB_ROOT_PASSWORD
+      - DB_PASSWORD
     deploy:
       resources:
         limits:
@@ -24,14 +66,19 @@ services:
       # Owner account (Flyway only) and the row-only one the backend runs with
       # (ops/mysql/create-app-runtime-user.sh).
       DB_USERNAME: ${DB_USERNAME:?set DB_USERNAME in .env}
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       DB_APP_USERNAME: ${DB_APP_USERNAME:?run ops/mysql/create-app-runtime-user.sh}
-      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?run ops/mysql/create-app-runtime-user.sh}
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
-      # Set only while rotating JWT_SECRET (docs/SECURITY.md in the backend).
-      JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
-      # Two-factor secrets at rest, never derived from JWT_SECRET.
-      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?run ops/secrets/create-totp-encryption-key.sh}
+      # Read from /run/secrets by Spring (configtree import in application.properties).
+      DB_PASSWORD: !reset null
+      DB_APP_PASSWORD: !reset null
+      JWT_SECRET: !reset null
+      JWT_SECRET_PREVIOUS: !reset null
+      TOTP_ENCRYPTION_KEY: !reset null
+      MAIL_PASSWORD: !reset null
+      ML_INTERNAL_API_KEY: !reset null
+      ML_CLAIMS_PRIVATE_KEY: !reset null
+      INTERNAL_ADMIN_API_KEY: !reset null
+      STRIPE_SECRET_KEY: !reset null
+      STRIPE_WEBHOOK_SECRET: !reset null
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_BASE_URL: https://bcm.donatocorbacio.dev
       BACKEND_BASE_URL: https://bcm.donatocorbacio.dev/api/v1
@@ -50,6 +97,21 @@ services:
       OLLAMA_URL: http://host.docker.internal:11434
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    secrets:
+      # Flyway's owner account and the row-only runtime one.
+      - DB_PASSWORD
+      - DB_APP_PASSWORD
+      - JWT_SECRET
+      # Empty except while rotating JWT_SECRET (docs/SECURITY.md in the backend).
+      - JWT_SECRET_PREVIOUS
+      # Two-factor secrets at rest, never derived from JWT_SECRET.
+      - TOTP_ENCRYPTION_KEY
+      - MAIL_PASSWORD
+      - ML_INTERNAL_API_KEY
+      - ML_CLAIMS_PRIVATE_KEY
+      - INTERNAL_ADMIN_API_KEY
+      - STRIPE_SECRET_KEY
+      - STRIPE_WEBHOOK_SECRET
     deploy:
       resources:
         limits:
@@ -68,8 +130,11 @@ services:
 
   ml:
     environment:
-      # Its read-only account (ops/mysql/create-ml-readonly-user.sh), never the backend's.
-      DB_URL: mysql+pymysql://${ML_DB_USERNAME:?run ops/mysql/create-ml-readonly-user.sh}:${ML_DB_PASSWORD:?run ops/mysql/create-ml-readonly-user.sh}@mysql:3306/bcm
+      # Read from /run/secrets by its settings (app/config.py): DB_URL holds
+      # its read-only account (ops/mysql/create-ml-readonly-user.sh), never
+      # the backend's; INTERNAL_API_KEY is the backend's ML_INTERNAL_API_KEY.
+      DB_URL: !reset null
+      INTERNAL_API_KEY: !reset null
       # Refuses to start without INTERNAL_API_KEY and INTERNAL_CLAIMS_PUBLIC_KEY.
       ENVIRONMENT: production
       CORS_ORIGINS: https://bcm.donatocorbacio.dev
@@ -77,6 +142,11 @@ services:
       OLLAMA_MODEL: llama3.2:1b
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    secrets:
+      - source: ML_DB_URL
+        target: DB_URL
+      - source: ML_INTERNAL_API_KEY
+        target: INTERNAL_API_KEY
     deploy:
       resources:
         limits:
