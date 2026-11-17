@@ -32,6 +32,7 @@ flowchart LR
     fe --> api["backend<br/>Spring Boot :8090"]
     api --> db[("mysql<br/>:3307 on the host")]
     api --> redis[("redis<br/>internal only")]
+    api --> clamav["clamav<br/>internal only"]
     api -.->|optional| ml["ml<br/>FastAPI :8000"]
     ml -.->|read only| db
     api -.->|optional, on the host| ollama["Ollama"]
@@ -50,6 +51,7 @@ flowchart LR
         redis[("redis")]
     end
     api --> data
+    api -->|every upload| clamav["clamav<br/>antivirus"]
     subgraph nightly["cron on the VM, every night"]
         backup["03:15 backup.sh<br/>dump + files, encrypted,<br/>copied off-site and verified"]
         reset["04:15 demo-reset.sh<br/>rebuilds the demo company"]
@@ -87,6 +89,7 @@ bcm-v2/
 |---------|----------------|------|------------|-------------|
 | **MySQL** | `bcm-mysql` | `3307` | MySQL 8.0 | Database server with persistent volume |
 | **Redis** | `bcm-redis` | internal only | Redis 7 | Backs the distributed login/register rate limiter |
+| **ClamAV** | `bcm-clamav` | internal only | ClamAV 1.5 | Antivirus for every uploaded file; uploads are refused (503) while it is starting, a minute or two |
 | **Backend** | `bcm-backend` | `8090` | Spring Boot 4.1 + Java 21 | REST API with JWT authentication |
 | **Frontend** | `bcm-frontend` | `3000` | Next.js 16 + React 19 | Web UI with Tailwind CSS |
 | **ML** | `bcm-ml` | `8000` | Python + FastAPI | Optional: the features using it are off in the demo |
@@ -650,6 +653,7 @@ How the live demo runs, on one cloud VM:
 - ✅ In production only Caddy is exposed, with TLS; containers listen on `127.0.0.1`
 - ✅ Health checks and restart policies on every service
 - ✅ Encrypted, verified off-site backups; rate limiting on login and registration (Redis)
+- ✅ Every uploaded file scanned by ClamAV before the backend reads or stores it; Caddy refuses API bodies over 11 MB
 - ⚠️ Still open: secrets in `.env` rather than a secrets manager, a single VM (no orchestration, no failover), no container resource limits — see [SECURITY.md](./SECURITY.md)
 
 ---

@@ -58,6 +58,25 @@ services:
       retries: 5
       start_period: 10s
 
+  # ClamAV — the antivirus every uploaded file goes through before the backend
+  # reads or stores it (OWASP File Upload Cheat Sheet, malware scanning).
+  # Reached only inside the compose network (clamd on 3310), no port published.
+  # The image ships with the signatures (copied into the volume on first start)
+  # and freshclam inside it keeps them updated. Its own healthcheck reports
+  # healthy once clamd has loaded them, a minute or two after starting; until
+  # then uploads are refused with 503. The backend does not wait for it, so the
+  # rest of the app is up meanwhile. The debian variant is the one with an arm64
+  # build (the production VM).
+  clamav:
+    image: clamav/clamav:1.5.4-debian
+    container_name: bcm-clamav
+    logging: *default-logging
+    restart: unless-stopped
+    volumes:
+      - clamav_db:/var/lib/clamav
+    networks:
+      - bcm-network
+
   # Spring Boot Backend
   backend:
     build:
@@ -83,6 +102,11 @@ services:
       DB_APP_PASSWORD: ${DB_APP_PASSWORD:-${DB_PASSWORD:-bcm_password}}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # Antivirus for uploads (the clamav service above). Uploads fail closed:
+      # with clamd unreachable they are refused, never stored unscanned.
+      MALWARE_SCAN_ENABLED: ${MALWARE_SCAN_ENABLED:-true}
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
       # INSECURE DEFAULT — dev only. Override JWT_SECRET in .env for anything
       # beyond a throwaway local stack.
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-min-256-bits}
@@ -195,4 +219,6 @@ volumes:
   mysql_data:
     driver: local
   uploads_data:
+    driver: local
+  clamav_db:
     driver: local

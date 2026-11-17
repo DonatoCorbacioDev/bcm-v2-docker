@@ -38,6 +38,8 @@ services:
       # Every ADMIN must turn on 2FA before getting a session, except the demo's
       # internal admin: demo-reset.sh signs in as it with a password, every night.
       BCM_2FA_EXEMPT_USERNAMES: demo_admin
+      # Every upload is scanned in production, whatever .env says.
+      MALWARE_SCAN_ENABLED: "true"
       # Ollama runs on the VM host itself (no GPU, ARM CPU). Linux Docker has
       # no automatic host.docker.internal DNS like Docker Desktop — this
       # extra_hosts entry is what makes the name resolve here.
@@ -75,6 +77,15 @@ services:
       resources:
         limits:
           memory: 2G
+
+  clamav:
+    deploy:
+      resources:
+        limits:
+          # clamd holds the signatures in memory (about 1.2 GB) and, while it
+          # loads a freshclam update, the new set next to the old one for a
+          # moment: 2 GB would get it killed at the first daily reload.
+          memory: 3G
 
   redis:
     deploy:
