@@ -109,6 +109,9 @@ services:
       CLAMAV_PORT: 3310
       # One-off recheck of the files already stored, at this start: report only.
       UPLOAD_RESCAN_ENABLED: ${UPLOAD_RESCAN_ENABLED:-false}
+      # Key rotation and two-factor encryption (both empty in development).
+      JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:-}
       # INSECURE DEFAULT — dev only. Override JWT_SECRET in .env for anything
       # beyond a throwaway local stack.
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-min-256-bits}

@@ -28,6 +28,10 @@ services:
       DB_APP_USERNAME: ${DB_APP_USERNAME:?run ops/mysql/create-app-runtime-user.sh}
       DB_APP_PASSWORD: ${DB_APP_PASSWORD:?run ops/mysql/create-app-runtime-user.sh}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # Set only while rotating JWT_SECRET (docs/SECURITY.md in the backend).
+      JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
+      # Two-factor secrets at rest, never derived from JWT_SECRET.
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?run ops/secrets/create-totp-encryption-key.sh}
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_BASE_URL: https://bcm.donatocorbacio.dev
       BACKEND_BASE_URL: https://bcm.donatocorbacio.dev/api/v1
