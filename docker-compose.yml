@@ -107,6 +107,8 @@ services:
       MALWARE_SCAN_ENABLED: ${MALWARE_SCAN_ENABLED:-true}
       CLAMAV_HOST: clamav
       CLAMAV_PORT: 3310
+      # One-off recheck of the files already stored, at this start: report only.
+      UPLOAD_RESCAN_ENABLED: ${UPLOAD_RESCAN_ENABLED:-false}
       # INSECURE DEFAULT — dev only. Override JWT_SECRET in .env for anything
       # beyond a throwaway local stack.
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-min-256-bits}
