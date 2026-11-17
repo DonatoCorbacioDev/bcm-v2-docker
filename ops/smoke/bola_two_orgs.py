@@ -46,6 +46,26 @@ results = []
 
 # ── HTTP ────────────────────────────────────────────────────────────────────
 
+def minimal_pdf():
+    """A real one-page PDF with no active content: uploads are opened and
+    checked, so a PDF header followed by anything else is refused (400)."""
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>",
+    ]
+    out = b"%PDF-1.4\n"
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % offset for offset in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, xref)
+    return out
+
+
 def call(method, path, token=None, body=None, files=None):
     """Returns (status, parsed JSON or text). Never raises on HTTP errors."""
     headers = {}
@@ -207,7 +227,7 @@ def main():
     a2 = contract(admin_a, base_a, mgr2, "A2")
     b1 = contract(admin_b, base_b, mgr_b, "B1")
     document = must("POST", f"/contracts/{a2['id']}/documents", admin_a,
-                    files=("file", "bola.pdf", b"%PDF-1.4\n%bola\n", "application/pdf"))
+                    files=("file", "bola.pdf", minimal_pdf(), "application/pdf"))
     print("setup: 2 organizations, 3 managers, 3 contracts, 1 document\n")
 
     b_contract_before = must("GET", f"/contracts/{b1['id']}", admin_b)

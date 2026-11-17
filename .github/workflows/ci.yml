@@ -101,8 +101,10 @@ jobs:
           repository: DonatoCorbacioDev/bcm-v2-ml
           path: bcm-v2-ml
 
-      - name: Build and start mysql, backend, ml
-        run: docker compose up -d --build mysql backend ml
+      # ClamAV too: every upload is scanned, and refused (503) while clamd is
+      # not answering, so the smoke test runs the real path, antivirus included.
+      - name: Build and start mysql, clamav, backend, ml
+        run: docker compose up -d --build mysql clamav backend ml
 
       - name: Wait for backend health
         run: |
@@ -128,6 +130,21 @@ jobs:
             sleep 5
           done
           echo "ML service did not become healthy in time."
+          exit 1
+
+      # The image's own healthcheck: healthy once clamd has loaded the signatures.
+      - name: Wait for ClamAV health
+        run: |
+          for i in $(seq 1 60); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' bcm-clamav 2>/dev/null || echo missing)
+            if [ "$status" = "healthy" ]; then
+              echo "ClamAV is up."
+              exit 0
+            fi
+            echo "Waiting for ClamAV... ($i/60, $status)"
+            sleep 10
+          done
+          echo "ClamAV did not become healthy in time."
           exit 1
 
       # Registration is two-step since 2026-10-28: the first call only emails a
