@@ -21,6 +21,11 @@ services:
     container_name: bcm-mysql
     logging: *default-logging
     restart: unless-stopped
+    # Lets the owner account, which has no SUPER privilege, create triggers
+    # with the binary log on (the backend's V60: audit_logs rows cannot be
+    # changed). The risk it guards against is a replica diverging from the
+    # primary; this setup has no replica.
+    command: ["--log-bin-trust-function-creators=1"]
     environment:
       # Empty defaults: in production these come from Docker secrets instead
       # (docker-compose.prod.yml), and .env no longer has them.
