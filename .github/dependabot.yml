@@ -10,3 +10,11 @@ updates:
     labels:
       - "dependencies"
       - "ci"
+
+  # The MySQL image (mysql/Dockerfile): the next 8.4 patch release.
+  - package-ecosystem: "docker"
+    directory: "/mysql"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"

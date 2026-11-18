@@ -30,14 +30,15 @@
 #
 # Needs: docker, age, gunzip, tar, diff. Environment: DB_NAME (default bcm),
 # READY_TIMEOUT (seconds to wait for the throwaway MySQL, default 180),
-# MYSQL_IMAGE (default mysql:8.0, keep it equal to production's).
+# MYSQL_IMAGE (default mysql:8.4.13, the version mysql/Dockerfile builds on:
+# keep them equal).
 
 set -euo pipefail
 umask 077
 export LC_ALL=C
 
 DB_NAME="${DB_NAME:-bcm}"
-MYSQL_IMAGE="${MYSQL_IMAGE:-mysql:8.0}"
+MYSQL_IMAGE="${MYSQL_IMAGE:-mysql:8.4.13}"
 READY_TIMEOUT="${READY_TIMEOUT:-180}"
 KEY="" DB="" UPLOADS="" COMPARE_MYSQL="" COMPARE_BACKEND=""
 name="bcm-restore-test-$$"

@@ -14,13 +14,40 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+# Every container (OWASP Docker Security Cheat Sheet): no Linux capability
+# unless listed under its own cap_add, no gaining privileges through setuid
+# binaries, a read-only root filesystem (what a service must write goes to a
+# volume or a tmpfs), and a ceiling on processes against a fork bomb. Here,
+# not only in production, so the CI smoke test runs the stack this way.
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+
 services:
   # MySQL Database
   mysql:
-    image: mysql:8.0
+    # MySQL 8.4 LTS, without the tools it never uses (mysql/Dockerfile).
+    build:
+      context: ./mysql
     container_name: bcm-mysql
     logging: *default-logging
     restart: unless-stopped
+    <<: *hardening
+    # Started as the mysql user (999, who owns the data volume): the
+    # entrypoint then never switches users, and needs no capability at all.
+    user: "999:999"
+    tmpfs:
+      - /tmp
+      # Owned by mysql, which writes its socket and pid file there; 0755,
+      # not tmpfs' default 1777, which mysqld warns about.
+      - /run/mysqld:mode=0755,uid=999,gid=999
+    deploy:
+      resources:
+        limits:
+          pids: 512
     # Lets the owner account, which has no SUPER privilege, create triggers
     # with the binary log on (the backend's V60: audit_logs rows cannot be
     # changed). The risk it guards against is a replica diverging from the
@@ -37,8 +64,11 @@ services:
       - "127.0.0.1:3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    # data: the database's own network, no way out. app only for the port
+    # published to this laptop; production leaves it (docker-compose.prod.yml).
     networks:
-      - bcm-network
+      - data
+      - app
     healthcheck:
       # Reads the root password inside the container ($$ is a literal $ for
       # compose), so it is never written into the container's configuration,
@@ -57,8 +87,20 @@ services:
     container_name: bcm-redis
     logging: *default-logging
     restart: unless-stopped
+    <<: *hardening
+    # Entrypoint as root, then the redis user.
+    cap_add: [CHOWN, SETGID, SETUID]
+    # Nothing written to disk: it holds only rate-limit counters, which a
+    # restart may safely reset.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          pids: 128
     networks:
-      - bcm-network
+      - data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -80,10 +122,26 @@ services:
     container_name: bcm-clamav
     logging: *default-logging
     restart: unless-stopped
+    <<: *hardening
+    # Its init runs as root and starts clamd and freshclam as the clamav user,
+    # which keep no capability. On a new volume it needs all five to prepare
+    # the signatures directory (without DAC_OVERRIDE and FOWNER freshclam
+    # cannot save its state there).
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    tmpfs:
+      - /tmp
+      - /run/clamav
+      - /run/lock
+      - /var/log/clamav
+    deploy:
+      resources:
+        limits:
+          pids: 256
     volumes:
       - clamav_db:/var/lib/clamav
+    # app: freshclam needs the internet for the signatures; no database here.
     networks:
-      - bcm-network
+      - app
 
   # Spring Boot Backend
   backend:
@@ -93,6 +151,16 @@ services:
     container_name: bcm-backend
     logging: *default-logging
     restart: unless-stopped
+    <<: *hardening
+    # Runs as spring and needs no capability. /tmp: Tomcat's work files,
+    # uploads being parsed, and native libraries (Brotli) the JVM extracts
+    # and loads from there, hence exec.
+    tmpfs:
+      - /tmp:exec,size=512m
+    deploy:
+      resources:
+        limits:
+          pids: 512
     depends_on:
       mysql:
         condition: service_healthy
@@ -154,8 +222,10 @@ services:
       - "127.0.0.1:8090:8090"
     volumes:
       - uploads_data:/app/uploads
+    # data for MySQL and Redis; app for ClamAV, ml, mail, Stripe and Ollama.
     networks:
-      - bcm-network
+      - data
+      - app
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8090/api/v1/actuator/health"]
       interval: 30s
@@ -173,6 +243,14 @@ services:
     container_name: bcm-frontend
     logging: *default-logging
     restart: unless-stopped
+    <<: *hardening
+    # Runs as nextjs and needs no capability; writes nothing but /tmp.
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          pids: 256
     depends_on:
       backend:
         condition: service_healthy
@@ -180,8 +258,10 @@ services:
       NEXT_PUBLIC_API_URL: http://localhost:8090/api/v1
     ports:
       - "127.0.0.1:3000:3000"
+    # A network of its own: the browser calls the backend, the server never
+    # does, so it reaches no other container.
     networks:
-      - bcm-network
+      - web
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
       interval: 30s
@@ -197,6 +277,15 @@ services:
     container_name: bcm-ml
     logging: *default-logging
     restart: unless-stopped
+    <<: *hardening
+    # Runs as ml and needs no capability. /tmp is its HOME (Dockerfile):
+    # matplotlib's cache, Prophet's Stan output, gunicorn's control socket.
+    tmpfs:
+      - /tmp:size=256m
+    deploy:
+      resources:
+        limits:
+          pids: 256
     depends_on:
       mysql:
         condition: service_healthy
@@ -215,8 +304,10 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8000:8000"
+    # data for MySQL; app for the backend's calls and Ollama on the host.
     networks:
-      - bcm-network
+      - data
+      - app
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -224,8 +315,19 @@ services:
       retries: 3
       start_period: 30s
 
+# Three networks instead of one (OWASP Docker Security, network isolation):
+# each container reaches only what it talks to.
 networks:
-  bcm-network:
+  # MySQL and Redis with the two services that use them; internal, so no
+  # way out to the internet, and nothing else can reach the database.
+  data:
+    driver: bridge
+    internal: true
+  # backend, ml and ClamAV: the outside services they call and each other.
+  app:
+    driver: bridge
+  # The frontend alone.
+  web:
     driver: bridge
 
 volumes:

@@ -19,10 +19,14 @@ This repository contains the Docker Compose configuration for the BCM v2.0 appli
 
 ### Current Implementation
 
-#### Container Security
-- ✅ **Docker secrets in production** - One file per secret in `secrets/` (directory `700`, files `444`, git-ignored), mounted at `/run/secrets/<NAME>` only in the containers that use it; no secret in any container's environment (`docker-compose.prod.yml`). Locally, `.env` (git-ignored)
-- ✅ **Network Isolation** - Custom bridge network `bcm-network`
-- ✅ **Non-default Ports** - MySQL on 3307 (not standard 3306)
+#### Container Security (OWASP Docker Security Cheat Sheet, reviewed 2026-11-18)
+- ✅ **Least privilege** - Every container drops all Linux capabilities (`cap_drop: ALL`) and runs with `no-new-privileges`; backend, frontend, ml and MySQL add none back. MySQL starts as its own user (999, `user:` in `docker-compose.yml`), so its entrypoint never switches users. Redis and ClamAV add back only what their entrypoint needs to hand its directories to an unprivileged user (`cap_add`, each tried one by one): Redis `CHOWN SETGID SETUID`, ClamAV five (`DAC_OVERRIDE` and `FOWNER` too, without which freshclam cannot save its state on a new volume). Their servers (`redis-server`, `clamd`, `freshclam`) keep none: effective capabilities `0`
+- ✅ **Non-root user** - backend (`spring`), frontend (`nextjs`) and ml (`ml`) run as unprivileged users; their code is owned by root and read-only to them, so a compromised service cannot rewrite it. MySQL runs as `mysql` from the start; Redis switches to its own user at start. ClamAV's init script is the one process left as root, without network access of its own; clamd and freshclam run as `clamav`
+- ✅ **Network isolation** - Three networks instead of one: `data` (internal: no route out) holds MySQL and Redis with the backend and ml, the only two that use them; `app` holds backend, ml and ClamAV, which need the internet (mail, Stripe, signature updates) and Ollama on the host; `web` holds the frontend alone, which calls nothing (the browser calls the API). In production MySQL is on `data` only and neither MySQL (3307) nor ml (8000) publishes a port; only the backend (8090) and the frontend (3000) do, on `127.0.0.1`, for Caddy. From the internet the VM accepts 22, 80 and 443 only (firewall). `app` keeps `172.18.0.0/16` in production: the firewall lets that subnet, and no other, reach Ollama
+- ✅ **Read-only root filesystem** - `read_only: true` everywhere. What a service writes goes to a volume (database, uploads, signatures) or a tmpfs: `/tmp` (the backend's with `exec`, for the native libraries the JVM extracts there), `/run/mysqld`, ClamAV's `/run/clamav`, `/run/lock`, `/var/log/clamav`. ml's `HOME` is `/tmp` and its bytecode is compiled at build time. Redis no longer writes to disk: it holds only rate-limit counters
+- ✅ **Resource limits** - Memory and CPU for each container in production (none can take both CPUs), and a ceiling on processes for each (`deploy.resources.limits.pids`) against a fork bomb
+- ✅ **Image scanning** - `.github/workflows/image-scan.yml`: Trivy (the official image, pinned by digest) on the four images we build (backend, frontend, ml, MySQL) and the two we pull (Redis, ClamAV), on every push and every Monday; it fails on a HIGH or CRITICAL vulnerability that has a fix. Each image is handed to Trivy as a file, never through the Docker socket
+- ✅ **Docker socket** - No container mounts `/var/run/docker.sock`. On the VM it is `root:docker 660`, and the only member of `docker` is the administrator, who has `sudo` anyway
 - ✅ **Volume Permissions** - Data persisted in named volumes
 
 #### Configuration Security
@@ -39,7 +43,6 @@ This is a **development/demonstration** configuration. The following should be a
 
 ### Development Configuration Issues
 
-- ⚠️ **No resource limits** - Containers can consume all system resources
 - ⚠️ **Bind mounts** - SQL init scripts mounted from host filesystem
 - ⚠️ **No TLS/SSL** - HTTP only (HTTPS should be enforced in production)
 
@@ -51,78 +54,20 @@ Before deploying with Docker in production:
 
 ### Container Hardening
 
-- [ ] **Run as non-root user**
-```yaml
-user: "1000:1000"
-```
-
-- [ ] **Read-only root filesystem**
-```yaml
-read_only: true
-tmpfs:
-  - /tmp
-  - /var/run
-```
-
-- [ ] **Drop unnecessary capabilities**
-```yaml
-cap_drop:
-  - ALL
-cap_add:
-  - NET_BIND_SERVICE
-```
-
-- [ ] **No privileged containers**
-```yaml
-privileged: false
-```
-
-- [ ] **Security options**
-```yaml
-security_opt:
-  - no-new-privileges:true
-  - apparmor:docker-default
-```
+- [x] **Non-root users, no capabilities, `no-new-privileges`, read-only root filesystem** - See Container Security above (`x-hardening` in `docker-compose.yml`, applied in development and CI too, so the smoke test runs the stack hardened)
+- [x] **No privileged containers** - None
+- [ ] **Rootless Docker or user-namespace remapping** - Not done: it changes the ownership of every volume on the VM, a risky migration, for one administrator who has `sudo` in any case
 
 ### Resource Limits
 
-- [ ] **Memory limits**
-```yaml
-deploy:
-  resources:
-    limits:
-      memory: 2G
-    reservations:
-      memory: 1G
-```
-
-- [ ] **CPU limits**
-```yaml
-deploy:
-  resources:
-    limits:
-      cpus: '2.0'
-    reservations:
-      cpus: '1.0'
-```
+- [x] **Memory, CPU and process limits** - `docker-compose.prod.yml` (memory, CPU), `docker-compose.yml` (processes)
 
 ### Network Security
 
-- [ ] **Internal networks** - Database not exposed externally
-```yaml
-mysql:
-  networks:
-    - internal
-  # Remove ports section
-
-networks:
-  internal:
-    internal: true  # No external access
-```
-
-- [ ] **TLS/SSL** - HTTPS only with valid certificates
-- [ ] **Reverse proxy** - Nginx/Traefik with SSL termination
-- [ ] **Firewall rules** - Restrict access to known IPs
+- [x] **Internal networks** - Database and Redis on the internal `data` network; no MySQL or ml port in production
+- [x] **TLS/SSL** - HTTPS only, certificates by Caddy
+- [x] **Reverse proxy** - Caddy on the host (`Caddyfile`)
+- [x] **Firewall rules** - Only 22, 80 and 443 from the internet
 
 ### Secrets Management
 
@@ -133,20 +78,13 @@ networks:
 
 ### Images
 
-- [ ] **Scan images** - Docker Scout, Trivy, Clair
-```bash
-docker scout cves bcm-backend:latest
-```
-
-- [ ] **Minimal base images** - Use Alpine or Distroless
-- [ ] **Multi-stage builds** - Reduce attack surface
-- [ ] **Image signing** - Docker Content Trust
-```bash
-export DOCKER_CONTENT_TRUST=1
-```
-
-- [ ] **Private registry** - Don't use public Docker Hub for production
-- [ ] **Version pinning** - Use specific image tags (not `latest`)
+- [x] **Scan images** - Trivy in CI, on every push and weekly (`image-scan.yml`)
+- [x] **Minimal base images** - Alpine for the backend, the frontend and Redis; `python:3.12-slim` for ml (numpy and Prophet need glibc wheels)
+- [x] **Multi-stage builds** - Backend and frontend: the runtime image carries no build tool
+- [x] **Small build context** - `.dockerignore` in each repo (ml's since 2026-11-18): no `.git`, tests or local `.env` in an image
+- [ ] **Image signing** - Not done: images are built on the VM from its own checkout, not pulled from a registry
+- [x] **Supported versions** - MySQL 8.4 LTS since 2026-11-18 (8.0 reached its end of life in April 2026), as `mysql/Dockerfile`: the official 8.4.13 image without MySQL Shell and gosu, which the server never uses and which held every known vulnerability left in it
+- [ ] **Version pinning by digest** - Tags are pinned to a version (`mysql:8.4.13`, `clamav/clamav:1.5.4-debian`) and Dependabot updates the base images; not by digest
 
 ### Monitoring & Logging
 
@@ -243,147 +181,9 @@ docker stats --no-stream
 
 ---
 
-## 🛠️ Hardened Production Example
+## 🛠️ Hardened Production Configuration
 
-```yaml
-version: '3.9'
-
-services:
-  mysql:
-    image: mysql:8.0.39
-    container_name: bcm-mysql
-    user: "1000:1000"
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - SETGID
-      - SETUID
-    networks:
-      - internal
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - /var/run/mysqld  # tmpfs for socket
-    environment:
-      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
-      MYSQL_DATABASE: bcm
-      MYSQL_USER: bcm_user
-      MYSQL_PASSWORD_FILE: /run/secrets/db_password
-    secrets:
-      - db_root_password
-      - db_password
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '2.0'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
-
-  backend:
-    build:
-      context: ../bcm-v2-backend
-      dockerfile: Dockerfile
-    image: bcm-backend:1.0.0
-    container_name: bcm-backend
-    user: "1000:1000"
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    networks:
-      - internal
-      - external
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-    secrets:
-      - db_password
-      - jwt_secret
-      - mail_password
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    restart: unless-stopped
-    depends_on:
-      mysql:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '2.0'
-
-  frontend:
-    build:
-      context: ../bcm-v2-frontend
-      dockerfile: Dockerfile
-    image: bcm-frontend:1.0.0
-    container_name: bcm-frontend
-    user: "1000:1000"
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    networks:
-      - external
-    environment:
-      NODE_ENV: production
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-    depends_on:
-      backend:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-
-networks:
-  internal:
-    driver: bridge
-    internal: true  # No external access
-  external:
-    driver: bridge
-
-volumes:
-  mysql_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /secure/path/mysql
-
-secrets:
-  db_root_password:
-    external: true
-  db_password:
-    external: true
-  jwt_secret:
-    external: true
-  mail_password:
-    external: true
-```
+The configuration production runs is the hardened one: `docker-compose.yml` (capabilities, read-only filesystems, tmpfs, process limits, the three networks, MySQL's user) with `docker-compose.prod.yml` on top (Docker secrets, memory and CPU, no MySQL or ml port), and `mysql/Dockerfile`. See Container Security above.
 
 ---
 

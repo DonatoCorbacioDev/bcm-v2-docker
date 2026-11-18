@@ -5,7 +5,7 @@
 [![CI](https://github.com/DonatoCorbacioDev/bcm-v2-docker/actions/workflows/ci.yml/badge.svg)](https://github.com/DonatoCorbacioDev/bcm-v2-docker/actions/workflows/ci.yml)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-brightgreen?logo=spring)](https://spring.io/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
-[![MySQL](https://img.shields.io/badge/MySQL-8.0-blue?logo=mysql)](https://www.mysql.com/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.4_LTS-blue?logo=mysql)](https://www.mysql.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-Custom-blue)](./LICENSE)
 
@@ -87,14 +87,14 @@ bcm-v2/
 
 | Service | Container Name | Port | Technology | Description |
 |---------|----------------|------|------------|-------------|
-| **MySQL** | `bcm-mysql` | `3307` | MySQL 8.0 | Database server with persistent volume |
+| **MySQL** | `bcm-mysql` | `3307` (not in production) | MySQL 8.4 LTS (`mysql/Dockerfile`) | Database server with persistent volume |
 | **Redis** | `bcm-redis` | internal only | Redis 7 | Backs the distributed login/register rate limiter |
 | **ClamAV** | `bcm-clamav` | internal only | ClamAV 1.5 | Antivirus for every uploaded file; uploads are refused (503) while it is starting, a minute or two |
 | **Backend** | `bcm-backend` | `8090` | Spring Boot 4.1 + Java 21 | REST API with JWT authentication |
 | **Frontend** | `bcm-frontend` | `3000` | Next.js 16 + React 19 | Web UI with Tailwind CSS |
 | **ML** | `bcm-ml` | `8000` | Python + FastAPI | Optional: the features using it are off in the demo |
 
-**Network:** All services communicate via `bcm-network` (bridge driver)
+**Networks:** three, so each container reaches only what it talks to: `data` (internal, no way out: MySQL and Redis, with the backend and ml), `app` (backend, ml, ClamAV) and `web` (the frontend alone). Every container runs without Linux capabilities beyond the few listed, with a read-only root filesystem — see [SECURITY.md](./SECURITY.md). In production MySQL and ml publish no port.
 
 ---
 

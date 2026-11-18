@@ -1,0 +1,87 @@
+name: Image scan
+
+# OWASP Docker Security Cheat Sheet, image scanning: every image the stack
+# runs, the four we build (backend, frontend, ml, MySQL on the official
+# image) and the two we pull (Redis, ClamAV), checked for
+# known vulnerabilities. On every push, and every Monday too: a new CVE needs
+# no commit of ours to appear.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The official image, by digest (0.76.1): a tag can be moved, a digest
+  # cannot. Dependabot does not update it; bump both together.
+  TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+
+jobs:
+  scan:
+    name: Trivy (HIGH and CRITICAL with a fix)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bcm-v2-docker
+
+    steps:
+      - name: Checkout docker repo
+        uses: actions/checkout@v7
+        with:
+          path: bcm-v2-docker
+
+      # Siblings inside the workspace, as docker-compose.yml expects (see ci.yml).
+      - name: Checkout backend repo
+        uses: actions/checkout@v7
+        with:
+          repository: DonatoCorbacioDev/bcm-v2-backend
+          path: bcm-v2-backend
+
+      - name: Checkout frontend repo
+        uses: actions/checkout@v7
+        with:
+          repository: DonatoCorbacioDev/bcm-v2-frontend
+          path: bcm-v2-frontend
+
+      - name: Checkout ml repo
+        uses: actions/checkout@v7
+        with:
+          repository: DonatoCorbacioDev/bcm-v2-ml
+          path: bcm-v2-ml
+
+      # mysql is built too: mysql/Dockerfile, on the official 8.4 image.
+      - name: Build our images and pull the others
+        run: |
+          docker compose build mysql backend frontend ml
+          docker compose pull redis clamav
+
+      # Each image is handed to Trivy as a file (docker save): Trivy never
+      # gets the Docker socket. It fails the job on a HIGH or CRITICAL
+      # vulnerability that a newer package already fixes, which is one we can
+      # act on (rebuild, bump the base image); unfixed ones are listed by the
+      # report but cannot be acted on yet.
+      - name: Scan every image
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-cache" "$RUNNER_TEMP/images"
+          status=0
+          for image in $(docker compose config --images | sort -u); do
+            file="$RUNNER_TEMP/images/$(echo "$image" | tr '/:' '__').tar"
+            docker save "$image" -o "$file"
+            echo "::group::$image"
+            docker run --rm \
+              -v "$RUNNER_TEMP/trivy-cache:/root/.cache/trivy" \
+              -v "$RUNNER_TEMP/images:/images:ro" \
+              "$TRIVY_IMAGE" image --input "/images/$(basename "$file")" \
+                --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+                --exit-code 1 --no-progress --format table \
+              || { echo "::error::$image has HIGH/CRITICAL vulnerabilities with a fix available"; status=1; }
+            echo "::endgroup::"
+            rm -f "$file"
+          done
+          exit $status

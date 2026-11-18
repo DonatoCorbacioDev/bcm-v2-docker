@@ -1,7 +1,10 @@
 # Copyright (c) 2025 Donato Corbacio. All rights reserved.
 # Licensed under the terms of the LICENSE file at the repository root.
 
-# Production overrides for bcm-prod (Oracle VM, 2 OCPU/12GB).
+# Production overrides for bcm-prod (Oracle VM, 2 OCPU/12GB). CPU limits
+# (OWASP Docker Security, resource limits): none can take both CPUs, so one
+# busy container (clamd scanning, a forecast, the JVM) leaves room for the
+# others; together they may exceed 2, which is a ceiling each, not a share.
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
 # Secrets are Docker secrets here (OWASP Secrets Management Cheat Sheet): one
@@ -56,10 +59,16 @@ services:
     secrets:
       - DB_ROOT_PASSWORD
       - DB_PASSWORD
+    # Only its own internal network and no port on the VM (OWASP Docker
+    # Security, network isolation): the ops scripts use docker exec.
+    networks: !override
+      - data
+    ports: !reset []
     deploy:
       resources:
         limits:
           memory: 1.5G
+          cpus: "1.5"
 
   backend:
     environment:
@@ -116,6 +125,7 @@ services:
       resources:
         limits:
           memory: 2G
+          cpus: "1.5"
 
   frontend:
     build:
@@ -127,6 +137,7 @@ services:
       resources:
         limits:
           memory: 1G
+          cpus: "1.0"
 
   ml:
     environment:
@@ -147,10 +158,13 @@ services:
         target: DB_URL
       - source: ML_INTERNAL_API_KEY
         target: INTERNAL_API_KEY
+    # Reached only by the backend, inside Docker: no port on the VM.
+    ports: !reset []
     deploy:
       resources:
         limits:
           memory: 2G
+          cpus: "1.0"
 
   clamav:
     deploy:
@@ -160,9 +174,20 @@ services:
           # loads a freshclam update, the new set next to the old one for a
           # moment: 2 GB would get it killed at the first daily reload.
           memory: 3G
+          cpus: "1.0"
 
   redis:
     deploy:
       resources:
         limits:
           memory: 256M
+          cpus: "0.5"
+
+# The VM's firewall lets containers reach Ollama on the host (port 11434)
+# from 172.18.0.0/16 only: the backend and ml reach it through app, so app
+# keeps that subnet.
+networks:
+  app:
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
