@@ -53,7 +53,7 @@ flowchart LR
     api --> data
     api -->|every upload| clamav["clamav<br/>antivirus"]
     subgraph nightly["cron on the VM, every night"]
-        backup["03:15 backup.sh<br/>dump + files, encrypted,<br/>copied off-site and verified"]
+        backup["01:15 backup.sh<br/>dump + files, encrypted,<br/>copied off-site and verified"]
         reset["04:15 demo-reset.sh<br/>rebuilds the demo company"]
     end
     backup -.-> data

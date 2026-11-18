@@ -9,8 +9,10 @@
 # has to exist on this machine: whoever steals the VM or the backup files
 # cannot read them, and a compromised VM cannot read old backups either.
 #
-# Runs on the production VM from cron, against the running containers:
-#   15 3 * * * /home/ubuntu/bcm-v2/bcm-v2-docker/ops/backup/backup.sh >> /home/ubuntu/backups/bcm/backup.log 2>&1
+# Runs on the production VM from cron, against the running containers,
+# always from this checkout (a copy elsewhere falls behind the repo: on
+# 2026-11-18 an old copy still read the root password from the environment):
+#   15 1 * * * HEALTHCHECK_URL=... /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/backup/backup.sh >> /home/ubuntu/backups/bcm/backup.log 2>&1
 #
 # One-time setup, on YOUR computer (not the VM):
 #   age-keygen -o bcm-backup-key.txt     # SECRET: password manager + an offline copy
