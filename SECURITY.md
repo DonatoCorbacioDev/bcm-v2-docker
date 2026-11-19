@@ -29,6 +29,9 @@ This repository contains the Docker Compose configuration for the BCM v2.0 appli
 - ✅ **Docker socket** - No container mounts `/var/run/docker.sock`. On the VM it is `root:docker 660`, and the only member of `docker` is the administrator, who has `sudo` anyway
 - ✅ **MySQL accounts (database security, 2026-11-19)** - root only from inside the container (`MYSQL_ROOT_HOST=localhost`; `ops/mysql/harden-accounts.sh` drops `root@'%'`); the schema owner's password only in the `migrate` container, which applies the backend's migrations and exits before the backend starts with its row-only account; a connection limit per account; X Protocol off (`--mysqlx=OFF`). `ops/mysql/check-privileges.sh` compares every account and `SHOW GRANTS` with `ops/mysql/expected-privileges.txt`, weekly from cron and after every deploy
 - ✅ **MySQL connections (database security, 2026-11-19)** - TLS 1.3 required on every network connection (`--require-secure-transport=ON`, `--tls-version=TLSv1.3`); in production MySQL uses a certificate from `ops/mysql/issue-tls-cert.sh` (a CA of our own, its key deleted after signing; the server certificate names `mysql` and `bcm-mysql`, valid two years) and every client checks it, CA and name (`sslMode=VERIFY_IDENTITY` for the backend and migrate, the host name for ml); `ops/mysql/check-privileges.sh` fails 30 days before it expires; the three application accounts accept connections only from the `data` network (`DB_ACCOUNT_HOST=172.19.%`, subnet fixed in `docker-compose.prod.yml`); passwords rotated with `ops/mysql/rotate-password.sh`
+- ✅ **MySQL hardening (database security, 2026-11-19)** - Features nothing uses are off: no binary log (`--skip-log-bin`; it held 30 days of every change to the data), no event scheduler, no file read or written by SQL (`--secure-file-priv=NULL`), no X Protocol
+- ✅ **Redis users (database security, 2026-11-19)** - `ops/redis/create-acl.sh` writes the ACL (`secrets/REDIS_ACL`, the password's SHA-256 only) and the backend's password (`secrets/REDIS_PASSWORD`): without logging in only PING (the healthcheck); the backend's user `bcm` may read, write and run scripts, never a dangerous command (FLUSHALL, CONFIG, KEYS...)
+- ✅ **Host (2026-11-19)** - `ops/host/apply-host-hardening.sh`: SSH with keys only, no root login, no forwarding, three attempts; daily security updates (Ubuntu's unattended-upgrades) with an automatic reboot at 02:30 UTC when one needs it, between the backup and the demo reset
 - ✅ **Volume Permissions** - Data persisted in named volumes
 
 #### Configuration Security
@@ -180,6 +183,20 @@ docker top bcm-backend
 # Check resource usage
 docker stats --no-stream
 ```
+
+---
+
+## 🔄 Monthly Maintenance
+
+Security updates reach the VM by themselves (daily, rebooting at 02:30 UTC when needed). The containers are rebuilt only when deployed, so once a month, and whenever the weekly image scan fails or Dependabot opens a pull request:
+
+1. Take a backup: `bash ops/backup/backup.sh`.
+2. Rebuild every image on its updated base, and pull the others: `docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull` and `... pull redis clamav`.
+3. Recreate the stack: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
+4. Check: `bash ops/mysql/check-privileges.sh` (accounts, privileges, TLS certificate expiry) and the health of every container.
+5. If `/var/run/reboot-required` exists, reboot the VM (or let 02:30 do it).
+
+Every two years, before the date `check-privileges.sh` reports: renew MySQL's TLS certificate with `bash ops/mysql/issue-tls-cert.sh`, then `up -d mysql migrate backend ml`.
 
 ---
 

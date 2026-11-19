@@ -55,6 +55,12 @@ secrets:
   # nothing, the store holding only that public certificate).
   MYSQL_SERVER_CERT:
     file: ./secrets/MYSQL_SERVER_CERT
+  # Redis's users (ops/redis/create-acl.sh): the ACL file holds the backend
+  # password's SHA-256 only; the password itself goes to the backend alone.
+  REDIS_ACL:
+    file: ./secrets/REDIS_ACL
+  REDIS_PASSWORD:
+    file: ./secrets/REDIS_PASSWORD
   MYSQL_SERVER_KEY:
     file: ./secrets/MYSQL_SERVER_KEY
   MYSQL_CA_CERT:
@@ -79,8 +85,8 @@ services:
       - MYSQL_CA_CERT
     # docker-compose.yml's flags, plus the certificate from
     # ops/mysql/issue-tls-cert.sh instead of the one MySQL generates.
-    command: ["--log-bin-trust-function-creators=1", "--mysqlx=OFF", "--require-secure-transport=ON",
-              "--tls-version=TLSv1.3",
+    command: ["--skip-log-bin", "--event-scheduler=OFF", "--secure-file-priv=NULL",
+              "--mysqlx=OFF", "--require-secure-transport=ON", "--tls-version=TLSv1.3",
               "--ssl-ca=/run/secrets/MYSQL_CA_CERT", "--ssl-cert=/run/secrets/MYSQL_SERVER_CERT",
               "--ssl-key=/run/secrets/MYSQL_SERVER_KEY"]
     # Only its own internal network and no port on the VM (OWASP Docker
@@ -138,6 +144,8 @@ services:
       # Every ADMIN must turn on 2FA before getting a session, except the demo's
       # internal admin: demo-reset.sh signs in as it with a password, every night.
       BCM_2FA_EXEMPT_USERNAMES: demo_admin
+      # Its own Redis user; the password is read from /run/secrets/REDIS_PASSWORD.
+      REDIS_USERNAME: bcm
       # Every upload is scanned in production, whatever .env says.
       MALWARE_SCAN_ENABLED: "true"
       # Ollama runs on the VM host itself (no GPU, ARM CPU). Linux Docker has
@@ -150,6 +158,7 @@ services:
       # The row-only account only: the owner's password stays with migrate.
       - DB_APP_PASSWORD
       - MYSQL_TRUSTSTORE
+      - REDIS_PASSWORD
       - JWT_SECRET
       # Empty except while rotating JWT_SECRET (docs/SECURITY.md in the backend).
       - JWT_SECRET_PREVIOUS
@@ -220,6 +229,11 @@ services:
           cpus: "1.0"
 
   redis:
+    # docker-compose.yml's flags, plus its users and their permissions:
+    # without logging in, PING alone (ops/redis/create-acl.sh).
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--aclfile", "/run/secrets/REDIS_ACL"]
+    secrets:
+      - REDIS_ACL
     deploy:
       resources:
         limits:

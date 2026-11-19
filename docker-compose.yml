@@ -48,10 +48,13 @@ services:
       resources:
         limits:
           pids: 512
-    # Lets the owner account, which has no SUPER privilege, create triggers
-    # with the binary log on (the backend's V60: audit_logs rows cannot be
-    # changed). The risk it guards against is a replica diverging from the
-    # primary; this setup has no replica.
+    # Features nothing here uses, off (OWASP Database Security, hardening):
+    # --skip-log-bin: no binary log. It kept a copy of every change to the
+    # data, personal data included, for 30 days, for replicas and point-in-time
+    # recovery; there is no replica and the backups are nightly dumps. Without
+    # it the owner account creates triggers (V60) with no extra setting.
+    # --event-scheduler=OFF: no scheduled events, there are none.
+    # --secure-file-priv=NULL: no file read or written by SQL, for any account.
     # --mysqlx=OFF: no X Protocol listener (port 33060), which nothing here
     # uses (OWASP Database Security, limit access to the server).
     # --require-secure-transport=ON: every connection over the network is TLS,
@@ -60,8 +63,8 @@ services:
     # On a laptop MySQL generates its own CA and certificates on the data
     # volume; production uses its own (docker-compose.prod.yml).
     # Production repeats this list, adding its certificates: keep both in step.
-    command: ["--log-bin-trust-function-creators=1", "--mysqlx=OFF", "--require-secure-transport=ON",
-              "--tls-version=TLSv1.3"]
+    command: ["--skip-log-bin", "--event-scheduler=OFF", "--secure-file-priv=NULL",
+              "--mysqlx=OFF", "--require-secure-transport=ON", "--tls-version=TLSv1.3"]
     environment:
       # root only from inside the container (the ops scripts, the healthcheck:
       # docker exec, over the local socket), never over the network. Applies

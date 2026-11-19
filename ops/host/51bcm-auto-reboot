@@ -1,0 +1,10 @@
+// Security updates of the production VM (OWASP Database Security: keep MySQL's
+// host and containers up to date). Ubuntu installs them every day already
+// (20auto-upgrades); this reboots when one needs it (a new kernel), at 02:30
+// UTC: after the backup (01:15), before the demo reset (04:15). Every container
+// restarts by itself (restart: unless-stopped). Installed as
+// /etc/apt/apt.conf.d/51bcm-auto-reboot by ops/host/apply-host-hardening.sh;
+// later files win over 50unattended-upgrades.
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "true";
+Unattended-Upgrade::Automatic-Reboot-Time "02:30";
