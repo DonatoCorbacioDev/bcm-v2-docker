@@ -9,7 +9,7 @@
 # - gosu, which switches from root to the mysql user at start, built with an
 #   old Go. docker-compose.yml starts the container as mysql (999) instead, so
 #   the entrypoint never calls it, and the server needs no Linux capability.
-FROM mysql:8.4.13
+FROM mysql:26.10.0
 
 # The base system's packages brought up to date as well: Oracle publishes
 # fixes before the official image is rebuilt (util-linux, Trivy, 2026-11-19).
