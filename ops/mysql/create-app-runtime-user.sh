@@ -10,8 +10,8 @@
 # or change a table, grant itself more, or read or write a file on the server.
 #
 # The account already in .env (DB_USERNAME, created by the MySQL image with
-# every privilege on bcm) stays as it is and is used by Flyway alone, at the
-# backend's startup, to apply the migrations.
+# every privilege on bcm) stays as it is and is used by the migrate container
+# alone, to apply the migrations; the backend never holds its password.
 #
 # Run once on the production VM, from this repository's root:
 #   bash ops/mysql/create-app-runtime-user.sh
@@ -56,7 +56,8 @@ fi
 # SQL, which contains the new password, goes through stdin.
 docker exec -i "$MYSQL_CONTAINER" sh -c "MYSQL_PWD=$ROOT_PWD_IN_MYSQL exec mysql -uroot --batch 2>/dev/null" <<SQL
 CREATE USER IF NOT EXISTS '${APP_USER}'@'%' IDENTIFIED BY '${password}';
-ALTER USER '${APP_USER}'@'%' IDENTIFIED BY '${password}';
+-- At most 60 connections (the pool holds 50): it cannot take the server's 151.
+ALTER USER '${APP_USER}'@'%' IDENTIFIED BY '${password}' WITH MAX_USER_CONNECTIONS 60;
 REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${APP_USER}'@'%';
 GRANT ${PRIVILEGES} ON \`${DB_NAME}\`.* TO '${APP_USER}'@'%';
 FLUSH PRIVILEGES;

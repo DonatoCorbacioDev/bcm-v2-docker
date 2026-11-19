@@ -57,7 +57,8 @@ done
 # SQL, which contains the new password, goes through stdin.
 docker exec -i "$MYSQL_CONTAINER" sh -c "MYSQL_PWD=$ROOT_PWD_IN_MYSQL exec mysql -uroot --batch 2>/dev/null" <<SQL
 CREATE USER IF NOT EXISTS '${ML_USER}'@'%' IDENTIFIED BY '${password}';
-ALTER USER '${ML_USER}'@'%' IDENTIFIED BY '${password}';
+-- At most 60 connections (4 workers, 15 each at most): it cannot take the server's 151.
+ALTER USER '${ML_USER}'@'%' IDENTIFIED BY '${password}' WITH MAX_USER_CONNECTIONS 60;
 REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${ML_USER}'@'%';
 ${grants}FLUSH PRIVILEGES;
 SQL

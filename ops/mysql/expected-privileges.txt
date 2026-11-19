@@ -1,0 +1,27 @@
+# MySQL accounts and privileges as they should be (ops/mysql/check-privileges.sh).
+# {OWNER} = DB_USERNAME (the schema owner, used by the migrate container only),
+# {APP} = DB_APP_USERNAME (the backend: rows only), {ML} = ML_DB_USERNAME (ml:
+# three tables, read only). In production's order (accounts sorted by name).
+# Change this file only together with the change it describes.
+ACCOUNT {APP}@% plugin=caching_sha2_password locked=N max_user_connections=60
+ACCOUNT {ML}@% plugin=caching_sha2_password locked=N max_user_connections=60
+ACCOUNT {OWNER}@% plugin=caching_sha2_password locked=N max_user_connections=5
+ACCOUNT mysql.infoschema@localhost plugin=caching_sha2_password locked=Y max_user_connections=0
+ACCOUNT mysql.session@localhost plugin=caching_sha2_password locked=Y max_user_connections=0
+ACCOUNT mysql.sys@localhost plugin=caching_sha2_password locked=Y max_user_connections=0
+ACCOUNT root@localhost plugin=caching_sha2_password locked=N max_user_connections=0
+GRANTS {APP}@%
+GRANT USAGE ON *.* TO `{APP}`@`%`
+GRANT SELECT, INSERT, UPDATE, DELETE ON `bcm`.* TO `{APP}`@`%`
+GRANTS {ML}@%
+GRANT USAGE ON *.* TO `{ML}`@`%`
+GRANT SELECT ON `bcm`.`contracts` TO `{ML}`@`%`
+GRANT SELECT ON `bcm`.`counterparties` TO `{ML}`@`%`
+GRANT SELECT ON `bcm`.`financial_values` TO `{ML}`@`%`
+GRANTS {OWNER}@%
+GRANT USAGE ON *.* TO `{OWNER}`@`%`
+GRANT ALL PRIVILEGES ON `bcm`.* TO `{OWNER}`@`%`
+GRANTS root@localhost
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, SHUTDOWN, PROCESS, FILE, REFERENCES, INDEX, ALTER, SHOW DATABASES, SUPER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE TABLESPACE, CREATE ROLE, DROP ROLE ON *.* TO `root`@`localhost` WITH GRANT OPTION
+GRANT ALLOW_NONEXISTENT_DEFINER,APPLICATION_PASSWORD_ADMIN,AUDIT_ABORT_EXEMPT,AUDIT_ADMIN,AUTHENTICATION_POLICY_ADMIN,BACKUP_ADMIN,BINLOG_ADMIN,BINLOG_ENCRYPTION_ADMIN,CLONE_ADMIN,CONNECTION_ADMIN,ENCRYPTION_KEY_ADMIN,FIREWALL_EXEMPT,FLUSH_OPTIMIZER_COSTS,FLUSH_PRIVILEGES,FLUSH_STATUS,FLUSH_TABLES,FLUSH_USER_RESOURCES,GROUP_REPLICATION_ADMIN,GROUP_REPLICATION_STREAM,INNODB_REDO_LOG_ARCHIVE,INNODB_REDO_LOG_ENABLE,OPTIMIZE_LOCAL_TABLE,PASSWORDLESS_USER_ADMIN,PERSIST_RO_VARIABLES_ADMIN,REPLICATION_APPLIER,REPLICATION_SLAVE_ADMIN,RESOURCE_GROUP_ADMIN,RESOURCE_GROUP_USER,ROLE_ADMIN,SENSITIVE_VARIABLES_OBSERVER,SERVICE_CONNECTION_ADMIN,SESSION_VARIABLES_ADMIN,SET_ANY_DEFINER,SHOW_ROUTINE,SYSTEM_USER,SYSTEM_VARIABLES_ADMIN,TABLE_ENCRYPTION_ADMIN,TELEMETRY_LOG_ADMIN,TRANSACTION_GTID_TAG,XA_RECOVER_ADMIN ON *.* TO `root`@`localhost` WITH GRANT OPTION
+GRANT PROXY ON ``@`` TO `root`@`localhost` WITH GRANT OPTION

@@ -52,8 +52,15 @@ services:
     # with the binary log on (the backend's V60: audit_logs rows cannot be
     # changed). The risk it guards against is a replica diverging from the
     # primary; this setup has no replica.
-    command: ["--log-bin-trust-function-creators=1"]
+    # --mysqlx=OFF: no X Protocol listener (port 33060), which nothing here
+    # uses (OWASP Database Security, limit access to the server).
+    command: ["--log-bin-trust-function-creators=1", "--mysqlx=OFF"]
     environment:
+      # root only from inside the container (the ops scripts, the healthcheck:
+      # docker exec, over the local socket), never over the network. Applies
+      # when the data volume is first created; on an existing one,
+      # ops/mysql/harden-accounts.sh drops root@'%'.
+      MYSQL_ROOT_HOST: localhost
       # Empty defaults: in production these come from Docker secrets instead
       # (docker-compose.prod.yml), and .env no longer has them.
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-}
@@ -143,6 +150,43 @@ services:
     networks:
       - app
 
+  # The schema migrations, applied and done (OWASP Database Security, the
+  # application's account apart from the one that changes the schema): the
+  # backend's own image and migrations, run as the schema owner by
+  # DatabaseMigration, which then exits; the backend starts after it with the
+  # row-only account and only checks them. Every `up` runs it first: deploy
+  # with `up -d migrate backend`, not `--no-deps backend`, or a new migration
+  # is never applied and the backend refuses to start.
+  migrate:
+    build:
+      context: ../bcm-v2-backend
+      dockerfile: Dockerfile
+    container_name: bcm-migrate
+    logging: *default-logging
+    restart: "no"
+    <<: *hardening
+    entrypoint: ["java", "-Dloader.main=com.donatodev.bcm_backend.migration.DatabaseMigration",
+                 "-cp", "app.jar", "org.springframework.boot.loader.launch.PropertiesLauncher"]
+    # The image's healthcheck is the backend's web endpoint, which this never serves.
+    healthcheck:
+      disable: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          pids: 128
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/bcm?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME:-bcm_user}
+      DB_PASSWORD: ${DB_PASSWORD:-bcm_password}
+    # The database alone: no way out.
+    networks:
+      - data
+
   # Spring Boot Backend
   backend:
     build:
@@ -162,13 +206,18 @@ services:
         limits:
           pids: 512
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
       DB_URL: jdbc:mysql://mysql:3306/bcm?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-      # Owner account: Flyway only, to apply the migrations at startup.
+      # The migrations ran in migrate: Flyway here only checks them.
+      FLYWAY_MIGRATE_ON_START: "false"
+      # Owner account, on a laptop only for Flyway's check (production checks
+      # with the row-only account and gives the backend no owner password).
       DB_USERNAME: ${DB_USERNAME:-bcm_user}
       DB_PASSWORD: ${DB_PASSWORD:-bcm_password}
       # The account the backend runs with: rows only (SELECT, INSERT, UPDATE,

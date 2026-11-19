@@ -70,11 +70,21 @@ services:
           memory: 1.5G
           cpus: "1.5"
 
+  # The only container with the schema owner's password: it applies the
+  # migrations and exits (docker-compose.yml).
+  migrate:
+    environment:
+      DB_USERNAME: ${DB_USERNAME:?set DB_USERNAME in .env}
+      # Read from /run/secrets/DB_PASSWORD (DatabaseMigration).
+      DB_PASSWORD: !reset null
+    secrets:
+      - DB_PASSWORD
+
   backend:
     environment:
-      # Owner account (Flyway only) and the row-only one the backend runs with
-      # (ops/mysql/create-app-runtime-user.sh).
-      DB_USERNAME: ${DB_USERNAME:?set DB_USERNAME in .env}
+      # The row-only account the backend runs with and checks the migrations
+      # with (ops/mysql/create-app-runtime-user.sh); no owner account here.
+      DB_USERNAME: !reset null
       DB_APP_USERNAME: ${DB_APP_USERNAME:?run ops/mysql/create-app-runtime-user.sh}
       # Read from /run/secrets by Spring (configtree import in application.properties).
       DB_PASSWORD: !reset null
@@ -107,8 +117,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     secrets:
-      # Flyway's owner account and the row-only runtime one.
-      - DB_PASSWORD
+      # The row-only account only: the owner's password stays with migrate.
       - DB_APP_PASSWORD
       - JWT_SECRET
       # Empty except while rotating JWT_SECRET (docs/SECURITY.md in the backend).

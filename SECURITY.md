@@ -27,6 +27,7 @@ This repository contains the Docker Compose configuration for the BCM v2.0 appli
 - ✅ **Resource limits** - Memory and CPU for each container in production (none can take both CPUs), and a ceiling on processes for each (`deploy.resources.limits.pids`) against a fork bomb
 - ✅ **Image scanning** - `.github/workflows/image-scan.yml`: Trivy (the official image, pinned by digest) on the four images we build (backend, frontend, ml, MySQL) and the two we pull (Redis, ClamAV), on every push and every Monday; it fails on a HIGH or CRITICAL vulnerability that has a fix. Each image is handed to Trivy as a file, never through the Docker socket
 - ✅ **Docker socket** - No container mounts `/var/run/docker.sock`. On the VM it is `root:docker 660`, and the only member of `docker` is the administrator, who has `sudo` anyway
+- ✅ **MySQL accounts (database security, 2026-11-19)** - root only from inside the container (`MYSQL_ROOT_HOST=localhost`; `ops/mysql/harden-accounts.sh` drops `root@'%'`); the schema owner's password only in the `migrate` container, which applies the backend's migrations and exits before the backend starts with its row-only account; a connection limit per account; X Protocol off (`--mysqlx=OFF`). `ops/mysql/check-privileges.sh` compares every account and `SHOW GRANTS` with `ops/mysql/expected-privileges.txt`, weekly from cron and after every deploy
 - ✅ **Volume Permissions** - Data persisted in named volumes
 
 #### Configuration Security
