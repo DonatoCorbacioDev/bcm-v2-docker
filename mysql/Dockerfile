@@ -11,7 +11,10 @@
 #   the entrypoint never calls it, and the server needs no Linux capability.
 FROM mysql:8.4.13
 
+# The base system's packages brought up to date as well: Oracle publishes
+# fixes before the official image is rebuilt (util-linux, Trivy, 2026-11-19).
 RUN microdnf remove -y mysql-shell \
+    && microdnf update -y \
     && microdnf clean all \
     && rm -f /usr/local/bin/gosu
 
