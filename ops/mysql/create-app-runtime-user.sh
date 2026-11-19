@@ -35,6 +35,11 @@ source "$(dirname "$0")/../secrets/lib.sh"
 MYSQL_CONTAINER="${MYSQL_CONTAINER:-bcm-mysql}"
 DB_NAME="${DB_NAME:-bcm}"
 APP_USER="${DB_APP_USERNAME:-bcm_app}"
+# Hosts the account accepts connections from: DB_ACCOUNT_HOST in .env
+# (production: 172.19.%, the data network), any host otherwise.
+ACCOUNT_HOST="$(env_value DB_ACCOUNT_HOST)"
+ACCOUNT_HOST="${ACCOUNT_HOST:-%}"
+[[ "$ACCOUNT_HOST" =~ ^[0-9.%]+$ ]] || { echo "ERROR: DB_ACCOUNT_HOST must be an IP pattern such as 172.19.%" >&2; exit 1; }
 # Must match APP_PRIVILEGES in the backend's AbstractMySQLIntegrationTest,
 # where every integration test runs with exactly these privileges.
 PRIVILEGES="SELECT, INSERT, UPDATE, DELETE"
@@ -55,11 +60,11 @@ fi
 # The root password stays inside the container (its Docker secret); the
 # SQL, which contains the new password, goes through stdin.
 docker exec -i "$MYSQL_CONTAINER" sh -c "MYSQL_PWD=$ROOT_PWD_IN_MYSQL exec mysql -uroot --batch 2>/dev/null" <<SQL
-CREATE USER IF NOT EXISTS '${APP_USER}'@'%' IDENTIFIED BY '${password}';
+CREATE USER IF NOT EXISTS '${APP_USER}'@'${ACCOUNT_HOST}' IDENTIFIED BY '${password}';
 -- At most 60 connections (the pool holds 50): it cannot take the server's 151.
-ALTER USER '${APP_USER}'@'%' IDENTIFIED BY '${password}' WITH MAX_USER_CONNECTIONS 60;
-REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${APP_USER}'@'%';
-GRANT ${PRIVILEGES} ON \`${DB_NAME}\`.* TO '${APP_USER}'@'%';
+ALTER USER '${APP_USER}'@'${ACCOUNT_HOST}' IDENTIFIED BY '${password}' WITH MAX_USER_CONNECTIONS 60;
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${APP_USER}'@'${ACCOUNT_HOST}';
+GRANT ${PRIVILEGES} ON \`${DB_NAME}\`.* TO '${APP_USER}'@'${ACCOUNT_HOST}';
 FLUSH PRIVILEGES;
 SQL
 
@@ -70,5 +75,5 @@ unset password existing
 
 echo "Grants for ${APP_USER} (expected: USAGE plus ${PRIVILEGES} on ${DB_NAME}.*):"
 docker exec -i "$MYSQL_CONTAINER" sh -c "MYSQL_PWD=$ROOT_PWD_IN_MYSQL exec mysql -uroot --batch --skip-column-names 2>/dev/null" <<SQL
-SHOW GRANTS FOR '${APP_USER}'@'%';
+SHOW GRANTS FOR '${APP_USER}'@'${ACCOUNT_HOST}';
 SQL

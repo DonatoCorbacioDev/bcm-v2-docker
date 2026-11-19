@@ -54,7 +54,10 @@ services:
     # primary; this setup has no replica.
     # --mysqlx=OFF: no X Protocol listener (port 33060), which nothing here
     # uses (OWASP Database Security, limit access to the server).
-    command: ["--log-bin-trust-function-creators=1", "--mysqlx=OFF"]
+    # --require-secure-transport=ON: every connection over the network is TLS,
+    # refused otherwise; the local socket the ops scripts use stays allowed.
+    # MySQL generated its own CA and certificates on the data volume.
+    command: ["--log-bin-trust-function-creators=1", "--mysqlx=OFF", "--require-secure-transport=ON"]
     environment:
       # root only from inside the container (the ops scripts, the healthcheck:
       # docker exec, over the local socket), never over the network. Applies
@@ -182,7 +185,10 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      DB_URL: jdbc:mysql://mysql:3306/bcm?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      # TLS required (MySQL refuses plain connections); on a laptop the
+      # server's certificate is not checked, its CA being new with each
+      # volume. Production checks it (sslMode=VERIFY_CA, docker-compose.prod.yml).
+      DB_URL: jdbc:mysql://mysql:3306/bcm?sslMode=REQUIRED&serverTimezone=UTC
       DB_USERNAME: ${DB_USERNAME:-bcm_user}
       DB_PASSWORD: ${DB_PASSWORD:-bcm_password}
     # The database alone: no way out.
@@ -215,7 +221,10 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DB_URL: jdbc:mysql://mysql:3306/bcm?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      # TLS required (MySQL refuses plain connections); on a laptop the
+      # server's certificate is not checked, its CA being new with each
+      # volume. Production checks it (sslMode=VERIFY_CA, docker-compose.prod.yml).
+      DB_URL: jdbc:mysql://mysql:3306/bcm?sslMode=REQUIRED&serverTimezone=UTC
       # The migrations ran in migrate: Flyway here only checks them.
       FLYWAY_MIGRATE_ON_START: "false"
       # Owner account, on a laptop only for Flyway's check (production checks

@@ -33,6 +33,11 @@ source "$(dirname "$0")/../secrets/lib.sh"
 MYSQL_CONTAINER="${MYSQL_CONTAINER:-bcm-mysql}"
 DB_NAME="${DB_NAME:-bcm}"
 ML_USER="${ML_DB_USERNAME:-bcm_ml_ro}"
+# Hosts the account accepts connections from: DB_ACCOUNT_HOST in .env
+# (production: 172.19.%, the data network), any host otherwise.
+ACCOUNT_HOST="$(env_value DB_ACCOUNT_HOST)"
+ACCOUNT_HOST="${ACCOUNT_HOST:-%}"
+[[ "$ACCOUNT_HOST" =~ ^[0-9.%]+$ ]] || { echo "ERROR: DB_ACCOUNT_HOST must be an IP pattern such as 172.19.%" >&2; exit 1; }
 TABLES=(contracts counterparties financial_values)
 
 [ -f "$ENV_FILE" ] || { echo "ERROR: $ENV_FILE not found (run from the bcm-v2-docker root)" >&2; exit 1; }
@@ -50,16 +55,16 @@ fi
 
 grants=""
 for t in "${TABLES[@]}"; do
-    grants+="GRANT SELECT ON \`${DB_NAME}\`.\`${t}\` TO '${ML_USER}'@'%';"$'\n'
+    grants+="GRANT SELECT ON \`${DB_NAME}\`.\`${t}\` TO '${ML_USER}'@'${ACCOUNT_HOST}';"$'\n'
 done
 
 # The root password stays inside the container (its Docker secret); the
 # SQL, which contains the new password, goes through stdin.
 docker exec -i "$MYSQL_CONTAINER" sh -c "MYSQL_PWD=$ROOT_PWD_IN_MYSQL exec mysql -uroot --batch 2>/dev/null" <<SQL
-CREATE USER IF NOT EXISTS '${ML_USER}'@'%' IDENTIFIED BY '${password}';
+CREATE USER IF NOT EXISTS '${ML_USER}'@'${ACCOUNT_HOST}' IDENTIFIED BY '${password}';
 -- At most 60 connections (4 workers, 15 each at most): it cannot take the server's 151.
-ALTER USER '${ML_USER}'@'%' IDENTIFIED BY '${password}' WITH MAX_USER_CONNECTIONS 60;
-REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${ML_USER}'@'%';
+ALTER USER '${ML_USER}'@'${ACCOUNT_HOST}' IDENTIFIED BY '${password}' WITH MAX_USER_CONNECTIONS 60;
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${ML_USER}'@'${ACCOUNT_HOST}';
 ${grants}FLUSH PRIVILEGES;
 SQL
 
@@ -71,5 +76,5 @@ unset password existing
 
 echo "Grants for ${ML_USER} (expected: USAGE plus SELECT on ${TABLES[*]}):"
 docker exec -i "$MYSQL_CONTAINER" sh -c "MYSQL_PWD=$ROOT_PWD_IN_MYSQL exec mysql -uroot --batch --skip-column-names 2>/dev/null" <<SQL
-SHOW GRANTS FOR '${ML_USER}'@'%';
+SHOW GRANTS FOR '${ML_USER}'@'${ACCOUNT_HOST}';
 SQL

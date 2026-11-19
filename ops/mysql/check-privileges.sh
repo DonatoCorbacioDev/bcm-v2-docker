@@ -12,8 +12,11 @@
 # hash, so its output is safe to paste.
 #
 # In the expected file the three account names are placeholders, filled from
-# .env: {OWNER} (DB_USERNAME), {APP} (DB_APP_USERNAME), {ML} (ML_DB_USERNAME).
-# After a deliberate change, update the file in the same commit.
+# .env: {OWNER} (DB_USERNAME), {APP} (DB_APP_USERNAME), {ML} (ML_DB_USERNAME),
+# and {HOST} the host they accept connections from (DB_ACCOUNT_HOST, '%' when
+# unset). After a deliberate change, update the file in the same commit.
+# A password older than a year is reported too (OWASP Database Security,
+# credential rotation: ops/mysql/rotate-password.sh), without failing the check.
 #
 # Runs weekly from cron on the production VM, and after every deploy:
 #   0 6 * * MON HEALTHCHECK_URL=https://hc-ping.com/... /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/mysql/check-privileges.sh >> /home/ubuntu/backups/check-privileges.log 2>&1
@@ -53,6 +56,10 @@ log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 OWNER="$(env_value DB_USERNAME)"
 APP="$(env_value DB_APP_USERNAME)"
 ML="$(env_value ML_DB_USERNAME)"
+HOST="$(env_value DB_ACCOUNT_HOST)"
+HOST="${HOST:-%}"
+[[ "$HOST" =~ ^[0-9.%]+$ ]] || { log "ERROR: DB_ACCOUNT_HOST must be an IP pattern such as 172.19.%"; exit 1; }
+HOST_RE="${HOST//./\\.}"
 for name in "$OWNER" "$APP" "$ML"; do
     [[ "$name" =~ ^[A-Za-z0-9_]+$ ]] || { log "ERROR: DB_USERNAME, DB_APP_USERNAME and ML_DB_USERNAME must be set in $ENV_FILE"; exit 1; }
 done
@@ -75,8 +82,11 @@ while IFS= read -r account; do
     query+="SELECT 'GRANTS ${account}';"$'\n'"SHOW GRANTS FOR '${user}'@'${host}';"$'\n'
 done <<< "$accounts"
 
-# The real names replaced by their placeholders, then compared line by line.
-actual="$(printf '%s' "$query" | mysql_root | sed -e "s/\b${OWNER}\b/{OWNER}/g" -e "s/\b${APP}\b/{APP}/g" -e "s/\b${ML}\b/{ML}/g")"
+# The real names and host replaced by their placeholders, then compared line by line.
+actual="$(printf '%s' "$query" | mysql_root \
+    | sed -e "s/\b${OWNER}\b/{OWNER}/g" -e "s/\b${APP}\b/{APP}/g" -e "s/\b${ML}\b/{ML}/g" \
+          -e "s/}@${HOST_RE} /}@{HOST} /" -e "s/}@${HOST_RE}\$/}@{HOST}/" \
+          -e "s/}\`@\`${HOST_RE}\`/}\`@\`{HOST}\`/g")"
 expected="$(grep -v '^#' "$EXPECTED" | sed '/^$/d')"
 
 if diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") > /tmp/check-privileges.diff; then
@@ -87,4 +97,15 @@ else
     cat /tmp/check-privileges.diff
     rm -f /tmp/check-privileges.diff
     exit 1
+fi
+
+old="$(mysql_root <<'SQL'
+SELECT CONCAT(user, '@', host, ' since ', DATE(password_last_changed)) FROM mysql.user
+WHERE user NOT LIKE 'mysql.%' AND password_last_changed < NOW() - INTERVAL 365 DAY ORDER BY user;
+SQL
+)"
+if [ -n "$old" ]; then
+    while IFS= read -r line; do
+        log "WARNING: password unchanged for over a year: $line (ops/mysql/rotate-password.sh)"
+    done <<< "$old"
 fi

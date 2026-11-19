@@ -46,6 +46,15 @@ secrets:
     file: ./secrets/STRIPE_SECRET_KEY
   STRIPE_WEBHOOK_SECRET:
     file: ./secrets/STRIPE_WEBHOOK_SECRET
+  # MySQL's CA certificate, which signed the server's (OWASP Database Security,
+  # TLS): public, a file like the secrets so it reaches only the services that
+  # connect. PEM for ml, PKCS12 for the JVM (its password protects nothing:
+  # the store holds only that public certificate). Written by
+  # ops/mysql/export-ca.sh.
+  MYSQL_CA_CERT:
+    file: ./secrets/MYSQL_CA_CERT
+  MYSQL_TRUSTSTORE:
+    file: ./secrets/MYSQL_TRUSTSTORE
 
 services:
   mysql:
@@ -74,11 +83,14 @@ services:
   # migrations and exits (docker-compose.yml).
   migrate:
     environment:
+      # TLS with the server's certificate checked against MySQL's CA.
+      DB_URL: jdbc:mysql://mysql:3306/bcm?sslMode=VERIFY_CA&trustCertificateKeyStoreUrl=file:/run/secrets/MYSQL_TRUSTSTORE&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=public-ca-only&serverTimezone=UTC
       DB_USERNAME: ${DB_USERNAME:?set DB_USERNAME in .env}
       # Read from /run/secrets/DB_PASSWORD (DatabaseMigration).
       DB_PASSWORD: !reset null
     secrets:
       - DB_PASSWORD
+      - MYSQL_TRUSTSTORE
 
   backend:
     environment:
@@ -86,6 +98,9 @@ services:
       # with (ops/mysql/create-app-runtime-user.sh); no owner account here.
       DB_USERNAME: !reset null
       DB_APP_USERNAME: ${DB_APP_USERNAME:?run ops/mysql/create-app-runtime-user.sh}
+      # TLS with the server's certificate checked against MySQL's CA
+      # (SecurityStartupValidator refuses to start without it).
+      DB_URL: jdbc:mysql://mysql:3306/bcm?sslMode=VERIFY_CA&trustCertificateKeyStoreUrl=file:/run/secrets/MYSQL_TRUSTSTORE&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=public-ca-only&serverTimezone=UTC
       # Read from /run/secrets by Spring (configtree import in application.properties).
       DB_PASSWORD: !reset null
       DB_APP_PASSWORD: !reset null
@@ -119,6 +134,7 @@ services:
     secrets:
       # The row-only account only: the owner's password stays with migrate.
       - DB_APP_PASSWORD
+      - MYSQL_TRUSTSTORE
       - JWT_SECRET
       # Empty except while rotating JWT_SECRET (docs/SECURITY.md in the backend).
       - JWT_SECRET_PREVIOUS
@@ -155,8 +171,10 @@ services:
       # the backend's; INTERNAL_API_KEY is the backend's ML_INTERNAL_API_KEY.
       DB_URL: !reset null
       INTERNAL_API_KEY: !reset null
-      # Refuses to start without INTERNAL_API_KEY and INTERNAL_CLAIMS_PUBLIC_KEY.
+      # Refuses to start without INTERNAL_API_KEY, INTERNAL_CLAIMS_PUBLIC_KEY and DB_SSL_CA.
       ENVIRONMENT: production
+      # TLS to MySQL with the server's certificate checked against its CA.
+      DB_SSL_CA: /run/secrets/MYSQL_CA_CERT
       CORS_ORIGINS: https://bcm.donatocorbacio.dev
       OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: llama3.2:1b
@@ -167,6 +185,7 @@ services:
         target: DB_URL
       - source: ML_INTERNAL_API_KEY
         target: INTERNAL_API_KEY
+      - MYSQL_CA_CERT
     # Reached only by the backend, inside Docker: no port on the VM.
     ports: !reset []
     deploy:
@@ -200,3 +219,9 @@ networks:
     ipam:
       config:
         - subnet: 172.18.0.0/16
+  # Fixed too: the three application accounts accept connections from this
+  # subnet only ('172.19.%', ops/mysql/harden-accounts.sh), so it must not change.
+  data:
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16
