@@ -56,8 +56,12 @@ services:
     # uses (OWASP Database Security, limit access to the server).
     # --require-secure-transport=ON: every connection over the network is TLS,
     # refused otherwise; the local socket the ops scripts use stays allowed.
-    # MySQL generated its own CA and certificates on the data volume.
-    command: ["--log-bin-trust-function-creators=1", "--mysqlx=OFF", "--require-secure-transport=ON"]
+    # --tls-version=TLSv1.3: the only version every client here speaks already.
+    # On a laptop MySQL generates its own CA and certificates on the data
+    # volume; production uses its own (docker-compose.prod.yml).
+    # Production repeats this list, adding its certificates: keep both in step.
+    command: ["--log-bin-trust-function-creators=1", "--mysqlx=OFF", "--require-secure-transport=ON",
+              "--tls-version=TLSv1.3"]
     environment:
       # root only from inside the container (the ops scripts, the healthcheck:
       # docker exec, over the local socket), never over the network. Applies

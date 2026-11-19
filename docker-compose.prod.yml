@@ -46,11 +46,17 @@ secrets:
     file: ./secrets/STRIPE_SECRET_KEY
   STRIPE_WEBHOOK_SECRET:
     file: ./secrets/STRIPE_WEBHOOK_SECRET
-  # MySQL's CA certificate, which signed the server's (OWASP Database Security,
-  # TLS): public, a file like the secrets so it reaches only the services that
-  # connect. PEM for ml, PKCS12 for the JVM (its password protects nothing:
-  # the store holds only that public certificate). Written by
-  # ops/mysql/export-ca.sh.
+  # MySQL's TLS certificate and key, and the CA that signed it (OWASP Database
+  # Security, secure connections), all written by ops/mysql/issue-tls-cert.sh,
+  # which deletes the CA's key right after signing. The server certificate names
+  # mysql and bcm-mysql, so the clients check the name too (VERIFY_IDENTITY).
+  # The CA certificate is public, a file like the secrets so it reaches only the
+  # services that connect: PEM for ml, PKCS12 for the JVM (its password protects
+  # nothing, the store holding only that public certificate).
+  MYSQL_SERVER_CERT:
+    file: ./secrets/MYSQL_SERVER_CERT
+  MYSQL_SERVER_KEY:
+    file: ./secrets/MYSQL_SERVER_KEY
   MYSQL_CA_CERT:
     file: ./secrets/MYSQL_CA_CERT
   MYSQL_TRUSTSTORE:
@@ -68,6 +74,15 @@ services:
     secrets:
       - DB_ROOT_PASSWORD
       - DB_PASSWORD
+      - MYSQL_SERVER_CERT
+      - MYSQL_SERVER_KEY
+      - MYSQL_CA_CERT
+    # docker-compose.yml's flags, plus the certificate from
+    # ops/mysql/issue-tls-cert.sh instead of the one MySQL generates.
+    command: ["--log-bin-trust-function-creators=1", "--mysqlx=OFF", "--require-secure-transport=ON",
+              "--tls-version=TLSv1.3",
+              "--ssl-ca=/run/secrets/MYSQL_CA_CERT", "--ssl-cert=/run/secrets/MYSQL_SERVER_CERT",
+              "--ssl-key=/run/secrets/MYSQL_SERVER_KEY"]
     # Only its own internal network and no port on the VM (OWASP Docker
     # Security, network isolation): the ops scripts use docker exec.
     networks: !override
@@ -83,8 +98,8 @@ services:
   # migrations and exits (docker-compose.yml).
   migrate:
     environment:
-      # TLS with the server's certificate checked against MySQL's CA.
-      DB_URL: jdbc:mysql://mysql:3306/bcm?sslMode=VERIFY_CA&trustCertificateKeyStoreUrl=file:/run/secrets/MYSQL_TRUSTSTORE&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=public-ca-only&serverTimezone=UTC
+      # TLS with the server's certificate checked: its CA and its name (mysql).
+      DB_URL: jdbc:mysql://mysql:3306/bcm?sslMode=VERIFY_IDENTITY&trustCertificateKeyStoreUrl=file:/run/secrets/MYSQL_TRUSTSTORE&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=public-ca-only&serverTimezone=UTC
       DB_USERNAME: ${DB_USERNAME:?set DB_USERNAME in .env}
       # Read from /run/secrets/DB_PASSWORD (DatabaseMigration).
       DB_PASSWORD: !reset null
@@ -98,9 +113,9 @@ services:
       # with (ops/mysql/create-app-runtime-user.sh); no owner account here.
       DB_USERNAME: !reset null
       DB_APP_USERNAME: ${DB_APP_USERNAME:?run ops/mysql/create-app-runtime-user.sh}
-      # TLS with the server's certificate checked against MySQL's CA
+      # TLS with the server's certificate checked: its CA and its name (mysql)
       # (SecurityStartupValidator refuses to start without it).
-      DB_URL: jdbc:mysql://mysql:3306/bcm?sslMode=VERIFY_CA&trustCertificateKeyStoreUrl=file:/run/secrets/MYSQL_TRUSTSTORE&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=public-ca-only&serverTimezone=UTC
+      DB_URL: jdbc:mysql://mysql:3306/bcm?sslMode=VERIFY_IDENTITY&trustCertificateKeyStoreUrl=file:/run/secrets/MYSQL_TRUSTSTORE&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=public-ca-only&serverTimezone=UTC
       # Read from /run/secrets by Spring (configtree import in application.properties).
       DB_PASSWORD: !reset null
       DB_APP_PASSWORD: !reset null
@@ -173,7 +188,7 @@ services:
       INTERNAL_API_KEY: !reset null
       # Refuses to start without INTERNAL_API_KEY, INTERNAL_CLAIMS_PUBLIC_KEY and DB_SSL_CA.
       ENVIRONMENT: production
-      # TLS to MySQL with the server's certificate checked against its CA.
+      # TLS to MySQL with the server's certificate checked: its CA and its name.
       DB_SSL_CA: /run/secrets/MYSQL_CA_CERT
       CORS_ORIGINS: https://bcm.donatocorbacio.dev
       OLLAMA_URL: http://host.docker.internal:11434

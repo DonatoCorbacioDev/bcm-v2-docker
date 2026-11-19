@@ -16,7 +16,8 @@
 # and {HOST} the host they accept connections from (DB_ACCOUNT_HOST, '%' when
 # unset). After a deliberate change, update the file in the same commit.
 # A password older than a year is reported too (OWASP Database Security,
-# credential rotation: ops/mysql/rotate-password.sh), without failing the check.
+# credential rotation: ops/mysql/rotate-password.sh), without failing the check;
+# a TLS certificate expiring within 30 days fails it (ops/mysql/issue-tls-cert.sh).
 #
 # Runs weekly from cron on the production VM, and after every deploy:
 #   0 6 * * MON HEALTHCHECK_URL=https://hc-ping.com/... /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/mysql/check-privileges.sh >> /home/ubuntu/backups/check-privileges.log 2>&1
@@ -109,3 +110,14 @@ if [ -n "$old" ]; then
         log "WARNING: password unchanged for over a year: $line (ops/mysql/rotate-password.sh)"
     done <<< "$old"
 fi
+
+# The TLS certificate the server is using now (not a file that may differ):
+# failing 30 days before it expires gives the weekly run four warnings.
+not_after="$(printf '%s' "SHOW GLOBAL STATUS LIKE 'Ssl_server_not_after';" | mysql_root | cut -f2)"
+[ -n "$not_after" ] || { log "ERROR: MySQL reports no TLS certificate"; exit 1; }
+days_left=$(( ( $(date -u -d "$not_after" +%s) - $(date -u +%s) ) / 86400 ))
+if [ "$days_left" -lt 30 ]; then
+    log "ERROR: MySQL's TLS certificate expires in $days_left days ($not_after): run ops/mysql/issue-tls-cert.sh"
+    exit 1
+fi
+log "TLS certificate OK: $days_left days left"
