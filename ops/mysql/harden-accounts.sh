@@ -6,7 +6,7 @@
 # Brings the MySQL accounts of an existing database to their intended shape
 # (OWASP Database Security, users and privileges; limit access to the server):
 #   - root only from inside the container (the local socket the ops scripts
-#     and the healthcheck use), never over the network: drops root@'%', which
+#     use), never over the network: drops root@'%', which
 #     the MySQL image creates on a new volume unless MYSQL_ROOT_HOST says
 #     otherwise (docker-compose.yml now does);
 #   - a ceiling on each account's connections, so none can take all of the
