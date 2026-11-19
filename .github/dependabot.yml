@@ -11,10 +11,16 @@ updates:
       - "dependencies"
       - "ci"
 
-  # The MySQL image (mysql/Dockerfile): the next 8.4 patch release.
+  # The MySQL image (mysql/Dockerfile): the next 8.4 patch release only. 8.4 is
+  # the LTS line, fixes for years without new features; a newer major or an
+  # Innovation release (9.x, 26.x) is an upgrade of the database, decided and
+  # tested on its own, never a weekly pull request.
   - package-ecosystem: "docker"
     directory: "/mysql"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "mysql"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     labels:
       - "dependencies"

@@ -55,10 +55,12 @@ jobs:
           repository: DonatoCorbacioDev/bcm-v2-ml
           path: bcm-v2-ml
 
-      # mysql is built too: mysql/Dockerfile, on the official 8.4 image.
+      # mysql is built too: mysql/Dockerfile, on the official 8.4 image. migrate is
+      # the backend's image under its own name (the cache makes it free): every
+      # image `docker compose config --images` lists must exist to be scanned.
       - name: Build our images and pull the others
         run: |
-          docker compose build mysql backend frontend ml
+          docker compose build mysql backend migrate frontend ml
           docker compose pull redis clamav
 
       # Each image is handed to Trivy as a file (docker save): Trivy never
