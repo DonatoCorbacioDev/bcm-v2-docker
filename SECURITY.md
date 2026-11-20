@@ -197,6 +197,16 @@ Not encrypted, by choice: passwords and tokens are never stored in a readable fo
 
 Kept apart: the backup key opens the data and nothing else, the recovery key the secrets and nothing else; neither private key is ever on the VM.
 
+**The backups bucket** (`bcm-backups`, OCI Object Storage, checked in the console 2026-11-20): private, no pre-authenticated requests, Oracle-managed encryption key, versioning off. The VM's own identity (dynamic group `bcm-backup-vm`) may only create, read and inspect objects there:
+
+```
+Allow dynamic-group bcm-backup-vm to manage objects in tenancy where all {target.bucket.name='bcm-backups', any {request.permission='OBJECT_CREATE', request.permission='OBJECT_READ', request.permission='OBJECT_INSPECT'}}
+```
+
+so whoever takes the VM cannot delete or overwrite the copies outside it (tested: both refused). A time-bound retention rule of 7 days (`protezione-7-giorni`, not locked, so it can still be changed) refuses deleting or overwriting any object for 7 days, from the console too (tested: `RetentionRuleViolation`). Lifecycle rules then delete `daily/` after 10 days and `weekly/` after 35, by Object Storage itself (`bcm-backup-lifecycle-policy`); `recovery/` is never deleted automatically, so a copy of the current secrets always exists.
+
+**The VM's disk** is encrypted with an Oracle-managed key. In-transit encryption between the VM and its disk is off: it can be chosen only when an instance is created. No boot volume backups, by choice: they would be a copy of every secret outside the backup and recovery keys; the backups, the recovery bundle and the repositories are enough to rebuild the VM.
+
 **Checked weekly** (Monday 06:00 UTC, `ops/maintenance/weekly-checks.sh`, one Healthchecks.io check): `check-privileges.sh`, then `ops/maintenance/check-encryption.sh` (every two-factor secret `v2:`, passwords BCrypt, tokens SHA-256; newest backup under 26 hours and age-encrypted; `secrets/` 700, its files 444; a recovery bundle newer than every secret). It prints counts and formats, never a value.
 
 **Rotating the backup key** (if the private one may have leaked, or every few years): generate a new pair off the VM (`age-keygen`), replace `ops/backup/backup-recipient.pub` with the new public key, take a backup, run a restore test with the new private key. Keep the old private key as long as a backup encrypted with it exists (the weekly copies, in the bucket), then destroy it. The recovery key is rotated the same way, with `recovery-bundle.sh` in place of the backup.

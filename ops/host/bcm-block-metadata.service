@@ -1,0 +1,25 @@
+# Copyright (c) 2025 Donato Corbacio. All rights reserved.
+# Licensed under the terms of the LICENSE file at the repository root.
+#
+# Keeps the containers away from the instance metadata service (169.254.0.0/16),
+# where the VM's own identity is served: the credentials the backups use to
+# write to Object Storage. Only the host needs it; no container does, and their
+# DNS goes through Docker's resolver on the host, not to 169.254.169.254.
+# DOCKER-USER is the chain Docker leaves to the administrator and checks first
+# for every packet a container sends out; Docker recreates its chains when it
+# starts, so this runs after it, every time (PartOf). Installed by
+# apply-host-hardening.sh.
+
+[Unit]
+Description=Block the instance metadata service from Docker containers (BCM)
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'iptables -C DOCKER-USER -d 169.254.0.0/16 -j DROP 2>/dev/null || iptables -I DOCKER-USER 1 -d 169.254.0.0/16 -j DROP'
+
+[Install]
+WantedBy=docker.service
