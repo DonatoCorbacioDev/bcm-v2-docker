@@ -32,6 +32,9 @@ secrets:
     file: ./secrets/JWT_SECRET_PREVIOUS
   TOTP_ENCRYPTION_KEY:
     file: ./secrets/TOTP_ENCRYPTION_KEY
+  # Empty except while rotating TOTP_ENCRYPTION_KEY (ops/secrets/rotate-totp-key.sh).
+  TOTP_ENCRYPTION_KEY_PREVIOUS:
+    file: ./secrets/TOTP_ENCRYPTION_KEY_PREVIOUS
   MAIL_PASSWORD:
     file: ./secrets/MAIL_PASSWORD
   ML_INTERNAL_API_KEY:
@@ -128,6 +131,7 @@ services:
       JWT_SECRET: !reset null
       JWT_SECRET_PREVIOUS: !reset null
       TOTP_ENCRYPTION_KEY: !reset null
+      TOTP_ENCRYPTION_KEY_PREVIOUS: !reset null
       MAIL_PASSWORD: !reset null
       ML_INTERNAL_API_KEY: !reset null
       ML_CLAIMS_PRIVATE_KEY: !reset null
@@ -164,6 +168,7 @@ services:
       - JWT_SECRET_PREVIOUS
       # Two-factor secrets at rest, never derived from JWT_SECRET.
       - TOTP_ENCRYPTION_KEY
+      - TOTP_ENCRYPTION_KEY_PREVIOUS
       - MAIL_PASSWORD
       - ML_INTERNAL_API_KEY
       - ML_CLAIMS_PRIVATE_KEY

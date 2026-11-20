@@ -31,6 +31,7 @@ This repository contains the Docker Compose configuration for the BCM v2.0 appli
 - ✅ **MySQL connections (database security, 2026-11-19)** - TLS 1.3 required on every network connection (`--require-secure-transport=ON`, `--tls-version=TLSv1.3`); in production MySQL uses a certificate from `ops/mysql/issue-tls-cert.sh` (a CA of our own, its key deleted after signing; the server certificate names `mysql` and `bcm-mysql`, valid two years) and every client checks it, CA and name (`sslMode=VERIFY_IDENTITY` for the backend and migrate, the host name for ml); `ops/mysql/check-privileges.sh` fails 30 days before it expires; the three application accounts accept connections only from the `data` network (`DB_ACCOUNT_HOST=172.19.%`, subnet fixed in `docker-compose.prod.yml`); passwords rotated with `ops/mysql/rotate-password.sh`
 - ✅ **MySQL hardening (database security, 2026-11-19)** - Features nothing uses are off: no binary log (`--skip-log-bin`; it held 30 days of every change to the data), no event scheduler, no file read or written by SQL (`--secure-file-priv=NULL`), no X Protocol
 - ✅ **Redis users (database security, 2026-11-19)** - `ops/redis/create-acl.sh` writes the ACL (`secrets/REDIS_ACL`, the password's SHA-256 only) and the backend's password (`secrets/REDIS_PASSWORD`): without logging in only PING (the healthcheck); the backend's user `bcm` may read, write and run scripts, never a dangerous command (FLUSHALL, CONFIG, KEYS...)
+- ✅ **Keys and encryption at rest (database security, 2026-11-20)** - see Keys and Encryption at Rest below: every key's place, rotation and recovery copy; two-factor key rotation without losing 2FA; secrets recovery bundle under a key of its own; a weekly check that what should be encrypted still is
 - ✅ **Host (2026-11-19)** - `ops/host/apply-host-hardening.sh`: SSH with keys only, no root login, no forwarding, three attempts; daily security updates (Ubuntu's unattended-upgrades) with an automatic reboot at 02:30 UTC when one needs it, between the backup and the demo reset
 - ✅ **Volume Permissions** - Data persisted in named volumes
 
@@ -130,18 +131,11 @@ restart: unless-stopped
 
 ### Backup & Disaster Recovery
 
-- [ ] **Volume backups** - Automated database backups
-```bash
-docker run --rm \
-  --volumes-from bcm-mysql \
-  -v $(pwd):/backup \
-  alpine tar czf /backup/mysql-backup.tar.gz /var/lib/mysql
-```
-
-- [ ] **Offsite backups** - S3, Azure Blob, Google Cloud Storage
-- [ ] **Backup encryption** - Encrypt backups at rest
-- [ ] **Restore testing** - Regularly test backup restoration
-- [ ] **Disaster recovery plan** - Documented procedures
+- [x] **Database and uploads backups** - nightly at 01:15 UTC (`ops/backup/backup.sh`), and before every deploy
+- [x] **Offsite backups** - OCI Object Storage, checked byte-for-byte after every upload (`ops/backup/offsite.sh`)
+- [x] **Backup encryption** - age, to a public key: the private one is never on the VM
+- [x] **Key recovery** - `secrets/` and `.env` encrypted to a recovery key of their own, offsite under `recovery/` (`ops/secrets/recovery-bundle.sh`)
+- [x] **Restore testing** - `ops/backup/restore-test.sh`, monthly (see Monthly Maintenance)
 
 ---
 
@@ -186,6 +180,29 @@ docker stats --no-stream
 
 ---
 
+## 🔑 Keys and Encryption at Rest
+
+Database security, encryption at rest and key management (reviewed 2026-11-20). What is encrypted or hashed, and where each key lives:
+
+| Key | Protects | Where it is | Who reads it | Rotation | Recovery copy |
+|---|---|---|---|---|---|
+| `TOTP_ENCRYPTION_KEY` | two-factor secrets in `users` (AES-256-GCM, `v2:`) | `secrets/` on the VM | backend only | `ops/secrets/rotate-totp-key.sh`, no one loses 2FA | recovery bundle |
+| `JWT_SECRET` | session tokens (signature) | `secrets/` | backend | `JWT_SECRET_PREVIOUS` during the change | recovery bundle |
+| MySQL and Redis passwords | database and cache access | `secrets/` | the container of each account | `ops/mysql/rotate-password.sh`, `ops/redis/create-acl.sh` | recovery bundle |
+| MySQL TLS certificate and key | connections to MySQL | `secrets/` | mysql (key), clients (CA) | `ops/mysql/issue-tls-cert.sh`, every two years | recovery bundle |
+| Backup key (age) | backups of the database and uploads | private half **off the VM**, with the owner; `ops/backup/backup-recipient.pub` on it | the owner, to restore | see below | the owner's password manager |
+| Recovery key (age) | the recovery bundle of `secrets/` and `.env` | private half **off the VM**, kept apart from the backup key; `ops/secrets/recovery-recipient.pub` on it | the owner | as the backup key | the owner's password manager |
+
+Not encrypted, by choice: passwords and tokens are never stored in a readable form at all (BCrypt; SHA-256 of refresh, reset and invitation tokens). Contracts, counterparties, IBANs and uploaded files are stored in clear in MySQL and in the uploads volume, on the VM's disk, which Oracle Cloud encrypts. Encrypting them in the application would need the key on the same VM, since the backend must read them: it would protect only from a stolen disk, which the disk encryption already does, while making search and comparison harder (the IBAN anti-fraud check compares them). Their copies outside the VM, the backups, are encrypted with a key the VM does not have.
+
+Kept apart: the backup key opens the data and nothing else, the recovery key the secrets and nothing else; neither private key is ever on the VM.
+
+**Checked weekly** (Monday 06:00 UTC, `ops/maintenance/weekly-checks.sh`, one Healthchecks.io check): `check-privileges.sh`, then `ops/maintenance/check-encryption.sh` (every two-factor secret `v2:`, passwords BCrypt, tokens SHA-256; newest backup under 26 hours and age-encrypted; `secrets/` 700, its files 444; a recovery bundle newer than every secret). It prints counts and formats, never a value.
+
+**Rotating the backup key** (if the private one may have leaked, or every few years): generate a new pair off the VM (`age-keygen`), replace `ops/backup/backup-recipient.pub` with the new public key, take a backup, run a restore test with the new private key. Keep the old private key as long as a backup encrypted with it exists (the weekly copies, in the bucket), then destroy it. The recovery key is rotated the same way, with `recovery-bundle.sh` in place of the backup.
+
+---
+
 ## 🔄 Monthly Maintenance
 
 Security updates reach the VM by themselves (daily, rebooting at 02:30 UTC when needed). The containers are rebuilt only when deployed, so once a month, and whenever the weekly image scan fails or Dependabot opens a pull request:
@@ -193,8 +210,10 @@ Security updates reach the VM by themselves (daily, rebooting at 02:30 UTC when 
 1. Take a backup: `bash ops/backup/backup.sh`.
 2. Rebuild every image on its updated base, and pull the others: `docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull` and `... pull redis clamav`.
 3. Recreate the stack: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
-4. Check: `bash ops/mysql/check-privileges.sh` (accounts, privileges, TLS certificate expiry) and the health of every container.
+4. Check: `bash ops/maintenance/weekly-checks.sh` (accounts, privileges, TLS certificate expiry, encryption at rest, keys) and the health of every container.
 5. If `/var/run/reboot-required` exists, reboot the VM (or let 02:30 do it).
+6. Restore test: copy the newest backup set to the owner's computer and run `ops/backup/restore-test.sh` with the backup private key (it restores into a throwaway MySQL and counts tables, rows, migrations and files).
+7. If a secret changed this month: `bash ops/secrets/recovery-bundle.sh`.
 
 Every two years, before the date `check-privileges.sh` reports: renew MySQL's TLS certificate with `bash ops/mysql/issue-tls-cert.sh`, then `up -d mysql migrate backend ml`.
 
