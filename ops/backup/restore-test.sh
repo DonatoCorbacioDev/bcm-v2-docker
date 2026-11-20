@@ -20,18 +20,14 @@
 #   --compare-mysql <container>      row counts per table
 #   --compare-backend <container>    number of files and total bytes in uploads
 #
-# DISASTER RECOVERY (real restore on a fresh host): start the stack with
-# docker compose so MySQL creates the application user from .env and the
-# Docker secrets in secrets/ (keep a copy of both off the host), then run
-# the same decrypt pipeline into the real container instead of the throwaway:
-#   age -d -i KEY bcm-db-<stamp>.sql.gz.age | gunzip | docker exec -i bcm-mysql mysql -uroot -p
-#   age -d -i KEY bcm-uploads-<stamp>.tar.gz.age | tar -xz -C <dir>  (then copy into the uploads volume)
-# The dump contains only the application database, not MySQL accounts.
+# Monthly, on the owner's computer, with the copy ops/backup/fetch-copy.sh
+# keeps there. A real restore on a new VM: DISASTER_RECOVERY.md.
 #
 # Needs: docker, age, gunzip, tar, diff. Environment: DB_NAME (default bcm),
 # READY_TIMEOUT (seconds to wait for the throwaway MySQL, default 180),
 # MYSQL_IMAGE (default mysql:8.4.13, the version mysql/Dockerfile builds on:
-# keep them equal).
+# keep them equal), HEALTHCHECK_URL (optional: pinged when the restore
+# succeeds, with /fail when it fails, so a skipped month raises an alarm).
 
 set -euo pipefail
 umask 077
@@ -47,13 +43,18 @@ tmp=""
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 die() { log "ERROR: $*" >&2; exit 1; }
 usage() {
-  sed -n '6,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  sed -n '6,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
+HEALTHCHECK_URL="${HEALTHCHECK_URL:-}"
 cleanup() {
+  local status=$?
   docker rm -f "$name" >/dev/null 2>&1 || true
   if [ -n "$tmp" ]; then rm -rf "$tmp"; fi
+  if [ -n "$HEALTHCHECK_URL" ] && [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then
+    curl -fsS -m 10 --retry 3 "$HEALTHCHECK_URL/fail" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 
@@ -144,3 +145,6 @@ if [ -n "$UPLOADS" ]; then
 fi
 
 log "RESTORE OK"
+if [ -n "$HEALTHCHECK_URL" ]; then
+  curl -fsS -m 10 --retry 3 "$HEALTHCHECK_URL" >/dev/null 2>&1 || log "WARNING: could not ping HEALTHCHECK_URL"
+fi

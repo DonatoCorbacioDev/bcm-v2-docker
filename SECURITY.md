@@ -135,7 +135,9 @@ restart: unless-stopped
 - [x] **Offsite backups** - OCI Object Storage, checked byte-for-byte after every upload (`ops/backup/offsite.sh`)
 - [x] **Backup encryption** - age, to a public key: the private one is never on the VM
 - [x] **Key recovery** - `secrets/` and `.env` encrypted to a recovery key of their own, offsite under `recovery/` (`ops/secrets/recovery-bundle.sh`)
-- [x] **Restore testing** - `ops/backup/restore-test.sh`, monthly (see Monthly Maintenance)
+- [x] **Restore testing** - `ops/backup/restore-test.sh`, monthly (see Monthly Maintenance), monitored by its own Healthchecks.io check
+- [x] **A copy outside Oracle Cloud** - the newest backup set and recovery bundle, monthly, on the owner's computer (`ops/backup/fetch-copy.sh`, newest 3 kept): the VM and the bucket share one cloud account
+- [x] **Disaster recovery plan** - [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md): a new VM to the site back in service, RPO 24 hours, RTO half a day; the host's settings, firewall and cron kept in `ops/host/`
 
 ---
 
@@ -222,7 +224,7 @@ Security updates reach the VM by themselves (daily, rebooting at 02:30 UTC when 
 3. Recreate the stack: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
 4. Check: `bash ops/maintenance/weekly-checks.sh` (accounts, privileges, TLS certificate expiry, encryption at rest, keys) and the health of every container.
 5. If `/var/run/reboot-required` exists, reboot the VM (or let 02:30 do it).
-6. Restore test: copy the newest backup set to the owner's computer and run `ops/backup/restore-test.sh` with the backup private key (it restores into a throwaway MySQL and counts tables, rows, migrations and files).
+6. Restore test, on the owner's computer: `bash ops/backup/fetch-copy.sh "Q:/Archives/Business Contracts Manager 2.0/backup-copies"` (the copy outside Oracle), then `HEALTHCHECK_URL=<check "BCM prova ripristino"> bash ops/backup/restore-test.sh --key <backup key> --db ... --uploads ...` from that copy (it restores into a throwaway MySQL and counts tables, rows, migrations and files).
 7. If a secret changed this month: `bash ops/secrets/recovery-bundle.sh`.
 
 Every two years, before the date `check-privileges.sh` reports: renew MySQL's TLS certificate with `bash ops/mysql/issue-tls-cert.sh`, then `up -d mysql migrate backend ml`.

@@ -1,0 +1,17 @@
+# Copyright (c) 2025 Donato Corbacio. All rights reserved.
+# Licensed under the terms of the LICENSE file at the repository root.
+#
+# The production VM's crontab (user ubuntu, VM timezone UTC). Install on a new
+# VM with `crontab -e`, replacing each <UUID> with the ping URL of its own
+# Healthchecks.io check (never committed: whoever has it can mark a check as
+# passed). The real one is kept only on the VM, and in this file's shape.
+#
+#   01:15  nightly backup, offsite copy           check "BCM backup notturno"
+#   04:15  demo data reset (Nortiva)
+#   05:00  Sunday: remove unused Docker images and build cache
+#   06:00  Monday: accounts, privileges, TLS, encryption, keys   check "BCM permessi MySQL"
+
+15 1 * * * HEALTHCHECK_URL=https://hc-ping.com/<UUID> /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/backup/backup.sh >> /home/ubuntu/backups/bcm/backup.log 2>&1
+15 4 * * * /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/demo/demo-reset.sh
+0 5 * * SUN /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/maintenance/prune-docker.sh >> /home/ubuntu/prune-docker.log 2>&1
+0 6 * * 1 HEALTHCHECK_URL=https://hc-ping.com/<UUID> /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/maintenance/weekly-checks.sh >> /home/ubuntu/backups/check-privileges.log 2>&1
