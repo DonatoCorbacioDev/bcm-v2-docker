@@ -28,7 +28,10 @@ sudo install -m 644 -o root -g root "$HERE/51bcm-auto-reboot" /etc/apt/apt.conf.
 
 sudo install -m 644 -o root -g root "$HERE/bcm-block-metadata.service" /etc/systemd/system/bcm-block-metadata.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now bcm-block-metadata.service
+sudo systemctl enable bcm-block-metadata.service
+# Restarted, not just started: an already active one-shot service would not
+# run again, and its rules may have changed (they are added only if missing).
+sudo systemctl restart bcm-block-metadata.service
 
 # Host firewall: Oracle's Ubuntu image accepts SSH and rejects everything else
 # (the last INPUT rule); the stack needs these three before that rejection.
