@@ -18,7 +18,7 @@ How to bring BCM back on a **new VM** when the production one is lost: deleted, 
 | `secrets/` and `.env` | the bucket under `recovery/`; the same copy on the owner's computer | the stack does not start, and the two-factor secrets cannot be read |
 | Backup private key (age) | the owner only: password manager, offline copy | the backups cannot be opened |
 | Recovery private key (age, a different one) | the owner only, kept apart from the backup key | `secrets/` cannot be opened |
-| Accounts: Oracle Cloud, DNS, GitHub, Healthchecks.io, UptimeRobot | the owner | — |
+| Accounts: Oracle Cloud, Porkbun (domain and DNS), GitHub, Healthchecks.io, UptimeRobot | the owner | — |
 
 If the Oracle account itself is gone, the bucket is gone with it: use the copy on the owner's computer (`Q:\Archives\Business Contracts Manager 2.0\backup-copies\<stamp>\`), at most a month old, and the nightly backups in between are lost.
 
@@ -27,7 +27,7 @@ If the Oracle account itself is gone, the bucket is gone with it: use the copy o
 1. Oracle Cloud (or any provider with Ubuntu 24.04 on arm64 or amd64): `VM.Standard.A1.Flex`, 2 OCPU, 12 GB, 100 GB boot volume, Canonical Ubuntu 24.04, your SSH public key.
 2. **Instance metadata service: Version 2 only.** Security list: only 22, 80 and 443 in.
 3. Backups to the bucket authenticate as the VM itself: open the dynamic group `bcm-backup-vm` (Identity → Domains → Default → Dynamic groups) and make its matching rule cover the new instance (its OCID, or the compartment). The policy `bcm-backup-vm-policy` stays as it is (`SECURITY.md`, Keys and Encryption at Rest).
-4. Point the DNS record of `bcm.donatocorbacio.dev` to the new public IP now: Caddy needs it to obtain the HTTPS certificate.
+4. Point the DNS record of `bcm.donatocorbacio.dev` to the new public IP now, at Porkbun (the domain's registrar and DNS: Domain Management → DNS, the `A` record of `bcm`): Caddy needs it to obtain the HTTPS certificate.
 
 ## 2. The host
 
