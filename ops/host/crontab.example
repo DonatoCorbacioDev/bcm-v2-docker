@@ -9,7 +9,8 @@
 #   01:15  nightly backup, offsite copy           check "BCM backup notturno"
 #   04:15  demo data reset (Nortiva)
 #   05:00  Sunday: remove unused Docker images and build cache
-#   06:00  Monday: accounts, privileges, TLS, encryption, keys   check "BCM permessi MySQL"
+#   06:00  Monday: accounts, privileges, TLS, encryption, keys,
+#          configuration, connections, logs, updates             check "BCM permessi MySQL"
 
 15 1 * * * HEALTHCHECK_URL=https://hc-ping.com/<UUID> /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/backup/backup.sh >> /home/ubuntu/backups/bcm/backup.log 2>&1
 15 4 * * * /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/demo/demo-reset.sh

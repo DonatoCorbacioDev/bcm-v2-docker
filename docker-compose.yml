@@ -60,11 +60,15 @@ services:
     # --require-secure-transport=ON: every connection over the network is TLS,
     # refused otherwise; the local socket the ops scripts use stays allowed.
     # --tls-version=TLSv1.3: the only version every client here speaks already.
+    # --log-error-verbosity=3: notes too, among them every refused sign-in
+    # ("Access denied for user"), with its account and address (OWASP Database
+    # Security, monitoring). The healthcheck signs in for real, so they are rare.
     # On a laptop MySQL generates its own CA and certificates on the data
     # volume; production uses its own (docker-compose.prod.yml).
     # Production repeats this list, adding its certificates: keep both in step.
     command: ["--skip-log-bin", "--event-scheduler=OFF", "--secure-file-priv=NULL",
-              "--mysqlx=OFF", "--require-secure-transport=ON", "--tls-version=TLSv1.3"]
+              "--mysqlx=OFF", "--require-secure-transport=ON", "--tls-version=TLSv1.3",
+              "--log-error-verbosity=3"]
     environment:
       # root only from inside the container (the ops scripts, the healthcheck:
       # docker exec, over the local socket), never over the network. Applies
@@ -87,13 +91,14 @@ services:
       - data
       - app
     healthcheck:
-      # Over TCP, without a password: healthy only once the real server
-      # listens. On a new volume the image first runs a temporary server with
-      # networking off, which the local socket already answers, so a socket
-      # ping let migrate connect too early and fail (CI, 2026-11-19).
-      # mysqladmin ping exits 0 whenever the server answers, even "access
-      # denied", so it needs no account and reads no secret.
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      # Signed in as bcm_health (mysql/healthcheck-account.sql): over the local
+      # socket, as the mysql OS user, no password and no privilege. A ping that
+      # failed to authenticate, as it used to, counted as a failed connection
+      # every 10 seconds and buried real ones. Healthy only once the real
+      # server listens on the network: on a new volume the image first runs a
+      # temporary one with networking off, which the socket already answers,
+      # and migrate would connect too early and fail (CI, 2026-11-19).
+      test: ["CMD-SHELL", "[ \"$$(mysql --protocol=socket -ubcm_health --batch --skip-column-names -e 'SELECT @@skip_networking' 2>/dev/null)\" = 0 ]"]
       interval: 10s
       timeout: 5s
       retries: 5

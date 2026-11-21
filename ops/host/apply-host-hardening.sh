@@ -5,7 +5,7 @@
 #
 # Installs the production VM's host settings kept in this directory: SSH
 # (10-bcm-hardening.conf), the automatic reboot after security updates
-# (51bcm-auto-reboot), the containers kept away from the instance metadata
+# (51bcm-auto-reboot), the journal's size and retention (journald-bcm.conf), the containers kept away from the instance metadata
 # service (bcm-block-metadata.service), the firewall openings the stack needs
 # (80, 443, Ollama from the app network) and Ollama's own setting
 # (ollama-override.conf). Safe to run again: what is already there is kept. On the VM, from this repository's root:
@@ -25,6 +25,11 @@ fi
 sudo systemctl reload ssh
 
 sudo install -m 644 -o root -g root "$HERE/51bcm-auto-reboot" /etc/apt/apt.conf.d/51bcm-auto-reboot
+
+if ! sudo cmp -s "$HERE/journald-bcm.conf" /etc/systemd/journald.conf.d/bcm.conf; then
+    sudo install -D -m 644 -o root -g root "$HERE/journald-bcm.conf" /etc/systemd/journald.conf.d/bcm.conf
+    sudo systemctl restart systemd-journald
+fi
 
 sudo install -m 644 -o root -g root "$HERE/bcm-block-metadata.service" /etc/systemd/system/bcm-block-metadata.service
 sudo systemctl daemon-reload
@@ -67,6 +72,9 @@ echo "SSH now:"
 sudo sshd -T | grep -E "^(permitrootlogin|passwordauthentication|maxauthtries|allowtcpforwarding|x11forwarding|allowagentforwarding|permittunnel) " | sed 's/^/  /'
 echo "Automatic reboot:"
 apt-config dump | grep -E "Unattended-Upgrade::Automatic-Reboot" | sed 's/^/  /'
+echo "Journal (containers' logs):"
+systemd-analyze cat-config systemd/journald.conf 2>/dev/null | grep -E "^(Storage|SystemMaxUse|MaxRetentionSec)=" | sed 's/^/  /'
+journalctl --disk-usage 2>/dev/null | sed 's/^/  /'
 echo "Metadata service from containers:"
 sudo iptables -S DOCKER-USER | grep 169.254 | sed 's/^/  /'
 echo "Firewall openings:"

@@ -215,6 +215,17 @@ so whoever takes the VM cannot delete or overwrite the copies outside it (tested
 
 ---
 
+## 📋 Auditing and Monitoring
+
+What the application records, and how, is in the backend's `docs/SECURITY.md` (refusals, forged tokens, sensitive operations, the append-only audit log). Here, what the stack adds:
+
+- **MySQL's own log** keeps every refused sign-in, with account and address (`--log-error-verbosity=3`): `docker logs bcm-mysql | grep "Access denied"`. The container's healthcheck signs in for real, as `bcm_health` (`mysql/healthcheck-account.sql`: the local socket only, as the mysql OS user, no password, no privilege), so a failed connection is a real one. It used to be thousands a day, from the healthcheck itself, which hid any other.
+- **The containers' logs** go to the VM's journal (`docker-compose.prod.yml`, journald driver), not to a file Docker deletes with the container at every deploy: kept for 180 days or 2 GB (`ops/host/journald-bcm.conf`), written by root, readable by root and the `systemd-journal` and `adm` groups. `docker logs` still reads them; by container and time: `journalctl CONTAINER_NAME=bcm-backend --since "2026-11-21 08:00"`. No password, token or secret is written to them (tested in the backend).
+- **The audit log's rows** cannot be changed (V60). The application's account may delete them, as the 180-day retention and an organization's deletion need: a copy is in every nightly backup, offsite, undeletable for 7 days.
+- **Checked weekly**, with the other checks (`weekly-checks.sh`, the same Healthchecks.io check): `ops/maintenance/check-config.sh`, that MySQL still runs as hardened (TLS 1.3 required, no binary log, no SQL file access, no X Protocol, no events, refused sign-ins logged, the audit trigger present), that failed connections stay under 50 a day and connections well below the maximum, that every container logs to the journal with its limits installed, that security updates ran in the last two days and no reboot is overdue, that the metadata service is still blocked, and that the last offsite copy is under 26 hours old.
+
+---
+
 ## 🔄 Monthly Maintenance
 
 Security updates reach the VM by themselves (daily, rebooting at 02:30 UTC when needed). The containers are rebuilt only when deployed, so once a month, and whenever the weekly image scan fails or Dependabot opens a pull request:
@@ -222,7 +233,7 @@ Security updates reach the VM by themselves (daily, rebooting at 02:30 UTC when 
 1. Take a backup: `bash ops/backup/backup.sh`.
 2. Rebuild every image on its updated base, and pull the others: `docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull` and `... pull redis clamav`.
 3. Recreate the stack: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
-4. Check: `bash ops/maintenance/weekly-checks.sh` (accounts, privileges, TLS certificate expiry, encryption at rest, keys) and the health of every container.
+4. Check: `bash ops/maintenance/weekly-checks.sh` (accounts, privileges, TLS certificate expiry, encryption at rest, keys, configuration, connections, logs, updates) and the health of every container.
 5. If `/var/run/reboot-required` exists, reboot the VM (or let 02:30 do it).
 6. Restore test, on the owner's computer: `bash ops/backup/fetch-copy.sh "Q:/Archives/Business Contracts Manager 2.0/backup-copies"` (the copy outside Oracle), then `HEALTHCHECK_URL=<check "BCM prova ripristino"> bash ops/backup/restore-test.sh --key <backup key> --db ... --uploads ...` from that copy (it restores into a throwaway MySQL and counts tables, rows, migrations and files).
 7. If a secret changed this month: `bash ops/secrets/recovery-bundle.sh`.

@@ -102,7 +102,8 @@ fi
 
 old="$(mysql_root <<'SQL'
 SELECT CONCAT(user, '@', host, ' since ', DATE(password_last_changed)) FROM mysql.user
-WHERE user NOT LIKE 'mysql.%' AND password_last_changed < NOW() - INTERVAL 365 DAY ORDER BY user;
+WHERE user NOT LIKE 'mysql.%' AND plugin <> 'auth_socket'
+  AND password_last_changed < NOW() - INTERVAL 365 DAY ORDER BY user;
 SQL
 )"
 if [ -n "$old" ]; then

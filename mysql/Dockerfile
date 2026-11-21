@@ -18,4 +18,7 @@ RUN microdnf remove -y mysql-shell \
     && microdnf clean all \
     && rm -f /usr/local/bin/gosu
 
+# The healthcheck's own account, created with a new data volume.
+COPY --chmod=644 healthcheck-account.sql /docker-entrypoint-initdb.d/10-healthcheck-account.sql
+
 USER mysql

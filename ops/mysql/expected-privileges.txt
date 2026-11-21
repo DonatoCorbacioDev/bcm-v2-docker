@@ -2,9 +2,12 @@
 # {OWNER} = DB_USERNAME (the schema owner, used by the migrate container only),
 # {APP} = DB_APP_USERNAME (the backend: rows only), {ML} = ML_DB_USERNAME (ml:
 # three tables, read only), {HOST} = DB_ACCOUNT_HOST (production: 172.19.%,
-# the data network). In production's order (accounts sorted by name).
+# the data network). bcm_health: the container's healthcheck, no privilege,
+# no password, the local socket only (mysql/healthcheck-account.sql).
+# In production's order (accounts sorted by name).
 # Change this file only together with the change it describes.
 ACCOUNT {APP}@{HOST} plugin=caching_sha2_password locked=N max_user_connections=60
+ACCOUNT bcm_health@localhost plugin=auth_socket locked=N max_user_connections=2
 ACCOUNT {ML}@{HOST} plugin=caching_sha2_password locked=N max_user_connections=60
 ACCOUNT {OWNER}@{HOST} plugin=caching_sha2_password locked=N max_user_connections=5
 ACCOUNT mysql.infoschema@localhost plugin=caching_sha2_password locked=Y max_user_connections=0
@@ -14,6 +17,8 @@ ACCOUNT root@localhost plugin=caching_sha2_password locked=N max_user_connection
 GRANTS {APP}@{HOST}
 GRANT USAGE ON *.* TO `{APP}`@`{HOST}`
 GRANT SELECT, INSERT, UPDATE, DELETE ON `bcm`.* TO `{APP}`@`{HOST}`
+GRANTS bcm_health@localhost
+GRANT USAGE ON *.* TO `bcm_health`@`localhost`
 GRANTS {ML}@{HOST}
 GRANT USAGE ON *.* TO `{ML}`@`{HOST}`
 GRANT SELECT ON `bcm`.`contracts` TO `{ML}`@`{HOST}`

@@ -106,7 +106,7 @@ Run inside the backend container, so the files belong to its own user.
 ## 6. Back in service
 
 1. `docker ps`: every container `healthy`; `https://bcm.donatocorbacio.dev` answers; sign in as `demo`.
-2. `bash ops/maintenance/weekly-checks.sh`: accounts, privileges, TLS certificate, encryption, keys. It fails on the recovery bundle until step 4 below.
+2. `bash ops/maintenance/weekly-checks.sh`: accounts, privileges, TLS certificate, encryption, keys, configuration, logs. It fails on the recovery bundle and the offsite copy until step 4 below. The healthcheck's MySQL account comes with the new data volume (`mysql/healthcheck-account.sql`); the journal's limits with `apply-host-hardening.sh`.
 3. Cron: `crontab -e` with the lines of `ops/host/crontab.example`, the `<UUID>`s from the Healthchecks.io dashboard (same checks as before).
 4. `bash ops/backup/backup.sh` and `bash ops/secrets/recovery-bundle.sh` by hand: both must end with the offsite copy verified.
 5. UptimeRobot and Healthchecks.io: both turn green by themselves once the site answers and the next pings arrive.

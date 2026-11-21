@@ -71,8 +71,24 @@ secrets:
   MYSQL_TRUSTSTORE:
     file: ./secrets/MYSQL_TRUSTSTORE
 
+# Container logs to the VM's journal instead of a file per container (OWASP
+# Logging Cheat Sheet: keep logs, protect them). Docker deletes a container's
+# own log file when it recreates the container, at every deploy, and with it
+# the sign-ins and security events of the days before; the journal keeps them
+# across deploys and reboots, written by root, readable only by root and the
+# systemd-journal and adm groups, for 180 days or 2 GB (ops/host/journald-bcm.conf,
+# installed by ops/host/apply-host-hardening.sh). `docker logs` still reads them.
+# By container: journalctl CONTAINER_NAME=bcm-backend --since today
+# !override: json-file's max-size and max-file mean nothing to journald.
+x-journald: &journald
+  driver: journald
+  options:
+    tag: "{{.Name}}"
+
 services:
   mysql:
+    logging: !override
+      <<: *journald
     environment:
       # The image reads the *_FILE variants; it refuses both forms at once.
       MYSQL_ROOT_PASSWORD: !reset null
@@ -91,7 +107,7 @@ services:
     command: ["--skip-log-bin", "--event-scheduler=OFF", "--secure-file-priv=NULL",
               "--mysqlx=OFF", "--require-secure-transport=ON", "--tls-version=TLSv1.3",
               "--ssl-ca=/run/secrets/MYSQL_CA_CERT", "--ssl-cert=/run/secrets/MYSQL_SERVER_CERT",
-              "--ssl-key=/run/secrets/MYSQL_SERVER_KEY"]
+              "--ssl-key=/run/secrets/MYSQL_SERVER_KEY", "--log-error-verbosity=3"]
     # Only its own internal network and no port on the VM (OWASP Docker
     # Security, network isolation): the ops scripts use docker exec.
     networks: !override
@@ -106,6 +122,8 @@ services:
   # The only container with the schema owner's password: it applies the
   # migrations and exits (docker-compose.yml).
   migrate:
+    logging: !override
+      <<: *journald
     environment:
       # TLS with the server's certificate checked: its CA and its name (mysql).
       DB_URL: jdbc:mysql://mysql:3306/bcm?sslMode=VERIFY_IDENTITY&trustCertificateKeyStoreUrl=file:/run/secrets/MYSQL_TRUSTSTORE&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=public-ca-only&serverTimezone=UTC
@@ -117,6 +135,8 @@ services:
       - MYSQL_TRUSTSTORE
 
   backend:
+    logging: !override
+      <<: *journald
     environment:
       # The row-only account the backend runs with and checks the migrations
       # with (ops/mysql/create-app-runtime-user.sh); no owner account here.
@@ -182,6 +202,8 @@ services:
           cpus: "1.5"
 
   frontend:
+    logging: !override
+      <<: *journald
     build:
       args:
         NEXT_PUBLIC_API_URL: https://bcm.donatocorbacio.dev/api/v1
@@ -194,6 +216,8 @@ services:
           cpus: "1.0"
 
   ml:
+    logging: !override
+      <<: *journald
     environment:
       # Read from /run/secrets by its settings (app/config.py): DB_URL holds
       # its read-only account (ops/mysql/create-ml-readonly-user.sh), never
@@ -224,6 +248,8 @@ services:
           cpus: "1.0"
 
   clamav:
+    logging: !override
+      <<: *journald
     deploy:
       resources:
         limits:
@@ -234,6 +260,8 @@ services:
           cpus: "1.0"
 
   redis:
+    logging: !override
+      <<: *journald
     # docker-compose.yml's flags, plus its users and their permissions:
     # without logging in, PING alone (ops/redis/create-acl.sh).
     command: ["redis-server", "--save", "", "--appendonly", "no", "--aclfile", "/run/secrets/REDIS_ACL"]
