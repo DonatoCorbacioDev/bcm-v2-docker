@@ -142,7 +142,9 @@ services:
   # rest of the app is up meanwhile. The debian variant is the one with an arm64
   # build (the production VM).
   clamav:
-    image: clamav/clamav:1.5.4-debian
+    # ClamAV 1.5 on the official image, its system packages updated (clamav/Dockerfile).
+    build:
+      context: ./clamav
     container_name: bcm-clamav
     logging: *default-logging
     restart: unless-stopped

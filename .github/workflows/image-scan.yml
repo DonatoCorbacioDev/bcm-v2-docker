@@ -1,8 +1,8 @@
 name: Image scan
 
 # OWASP Docker Security Cheat Sheet, image scanning: every image the stack
-# runs, the four we build (backend, frontend, ml, MySQL on the official
-# image) and the two we pull (Redis, ClamAV), checked for
+# runs, the five we build (backend, frontend, ml, and MySQL and ClamAV on
+# their official images) and the one we pull (Redis), checked for
 # known vulnerabilities. On every push, and every Monday too: a new CVE needs
 # no commit of ours to appear.
 on:
@@ -55,13 +55,15 @@ jobs:
           repository: DonatoCorbacioDev/bcm-v2-ml
           path: bcm-v2-ml
 
-      # mysql is built too: mysql/Dockerfile, on the official 8.4 image. migrate is
+      # mysql and clamav are built too, on their official images with the system
+      # packages updated (mysql/Dockerfile, clamav/Dockerfile): rebuilt here
+      # every Monday, they carry Debian's and Oracle's latest fixes. migrate is
       # the backend's image under its own name (the cache makes it free): every
       # image `docker compose config --images` lists must exist to be scanned.
       - name: Build our images and pull the others
         run: |
-          docker compose build mysql backend migrate frontend ml
-          docker compose pull redis clamav
+          docker compose build --pull mysql clamav backend migrate frontend ml
+          docker compose pull redis
 
       # Each image is handed to Trivy as a file (docker save): Trivy never
       # gets the Docker socket. It fails the job on a HIGH or CRITICAL

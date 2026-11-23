@@ -90,7 +90,7 @@ bcm-v2/
 | **MySQL** | `bcm-mysql` | `3307` (not in production) | MySQL 8.4 LTS (`mysql/Dockerfile`) | Database server with persistent volume |
 | **Migrate** | `bcm-migrate` | — | The backend's image | Applies the schema migrations as the owner account, then exits; the backend starts after it |
 | **Redis** | `bcm-redis` | internal only | Redis 7 | Backs the distributed login/register rate limiter |
-| **ClamAV** | `bcm-clamav` | internal only | ClamAV 1.5 | Antivirus for every uploaded file; uploads are refused (503) while it is starting, a minute or two |
+| **ClamAV** | `bcm-clamav` | internal only | ClamAV 1.5 (`clamav/Dockerfile`: official image, system packages updated) | Antivirus for every uploaded file; uploads are refused (503) while it is starting, a minute or two |
 | **Backend** | `bcm-backend` | `8090` | Spring Boot 4.1 + Java 21 | REST API with JWT authentication |
 | **Frontend** | `bcm-frontend` | `3000` | Next.js 16 + React 19 | Web UI with Tailwind CSS |
 | **ML** | `bcm-ml` | `8000` | Python + FastAPI | Optional: the features using it are off in the demo |

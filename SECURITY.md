@@ -90,6 +90,7 @@ Before deploying with Docker in production:
 - [x] **Small build context** - `.dockerignore` in each repo (ml's since 2026-11-18): no `.git`, tests or local `.env` in an image
 - [ ] **Image signing** - Not done: images are built on the VM from its own checkout, not pulled from a registry
 - [x] **Supported versions** - MySQL 8.4 LTS since 2026-11-18 (8.0 reached its end of life in April 2026), as `mysql/Dockerfile`: the official 8.4.13 image without MySQL Shell and gosu, which the server never uses and which held every known vulnerability left in it
+- [x] **Base system fixes without waiting for upstream** - since 2026-11-23 ClamAV too is built on its official image with Debian's packages updated (`clamav/Dockerfile`): the official 1.5.4 image still carried 14 Kerberos vulnerabilities Debian had already fixed
 - [ ] **Version pinning by digest** - Tags are pinned to a version (`mysql:8.4.13`, `clamav/clamav:1.5.4-debian`) and Dependabot updates the base images; not by digest
 
 ### Monitoring & Logging
@@ -231,7 +232,7 @@ What the application records, and how, is in the backend's `docs/SECURITY.md` (r
 Security updates reach the VM by themselves (daily, rebooting at 02:30 UTC when needed). The containers are rebuilt only when deployed, so once a month, and whenever the weekly image scan fails or Dependabot opens a pull request:
 
 1. Take a backup: `bash ops/backup/backup.sh`.
-2. Rebuild every image on its updated base, and pull the others: `docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull` and `... pull redis clamav`.
+2. Rebuild every image on its updated base, and pull Redis: `docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull` and `... pull redis`. MySQL and ClamAV are built too (`mysql/Dockerfile`, `clamav/Dockerfile`), so their system packages come up to date with every build.
 3. Recreate the stack: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
 4. Check: `bash ops/maintenance/weekly-checks.sh` (accounts, privileges, TLS certificate expiry, encryption at rest, keys, configuration, connections, logs, updates) and the health of every container.
 5. If `/var/run/reboot-required` exists, reboot the VM (or let 02:30 do it).
