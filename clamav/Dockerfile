@@ -9,7 +9,7 @@
 # are published, as mysql/Dockerfile does for MySQL.
 # Nothing else changes: same ClamAV, same init, which starts as root and runs
 # clamd and freshclam as the clamav user (docker-compose.yml).
-FROM clamav/clamav:1.5.4-debian
+FROM clamav/clamav:1.5.5-debian
 
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
