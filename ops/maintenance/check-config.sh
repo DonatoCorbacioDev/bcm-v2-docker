@@ -17,6 +17,7 @@
 #   - the logs: every container's to the journal, the journal's limits installed;
 #   - the host: security updates applied in the last two days, no reboot
 #     pending for more than three, the metadata service still blocked;
+#   - the ML model: the one whose hash is approved in Git;
 #   - the backups: the last offsite copy less than 26 hours old.
 # Any failure exits 1. Run weekly from ops/maintenance/weekly-checks.sh, and by hand.
 #
@@ -131,6 +132,16 @@ else
 fi
 systemctl is-active --quiet bcm-block-metadata.service && log "OK: metadata service blocked from containers" \
     || fail "bcm-block-metadata.service not active: run ops/host/apply-host-hardening.sh"
+
+# --- ML model ------------------------------------------------------------------
+# The service loads only the model whose SHA-256 is in Git (bcm-v2-ml,
+# model/risk_model.sha256); a different one means risk scores silently from the
+# rules alone, so it fails here too, not only in the service's log.
+if docker exec bcm-ml sh -c 'cd /app/model && sha256sum -c --status risk_model.sha256' 2>/dev/null; then
+    log "OK: ML model is the approved one (model/risk_model.sha256)"
+else
+    fail "ML model missing or not the one approved in Git (bcm-v2-ml model/risk_model.sha256): risk scores fall back to rules"
+fi
 
 # --- Backups ---------------------------------------------------------------------
 last_offsite="$(grep -h 'offsite copy OK' "$BACKUP_LOG" 2>/dev/null | tail -1 | cut -d' ' -f1 || true)"
