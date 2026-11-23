@@ -1,0 +1,10 @@
+// Caddy's own updates, installed by the same daily job as Ubuntu's (OWASP
+// ASVS 4.1, keep the proxy up to date). Caddy comes from its own repository
+// (cloudsmith), which 50unattended-upgrades does not list: it stayed at 2.11.4
+// while 2.11.9 was out (2026-11-23). The package restarts Caddy when it
+// upgrades it, a second's pause; its certificates stay in /var/lib/caddy.
+// Installed as /etc/apt/apt.conf.d/52bcm-caddy-updates by
+// ops/host/apply-host-hardening.sh; apt adds this list to the others.
+Unattended-Upgrade::Origins-Pattern {
+	"origin=cloudsmith/caddy/stable";
+};

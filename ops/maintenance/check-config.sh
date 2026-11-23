@@ -16,7 +16,8 @@
 #     connections, the peak against the maximum;
 #   - the logs: every container's to the journal, the journal's limits installed;
 #   - the host: security updates applied in the last two days, no reboot
-#     pending for more than three, the metadata service still blocked;
+#     pending for more than three, the metadata service still blocked, Caddy
+#     in the automatic updates and not left behind;
 #   - the ML model: the one whose hash is approved in Git;
 #   - the backups: the last offsite copy less than 26 hours old.
 # Any failure exits 1. Run weekly from ops/maintenance/weekly-checks.sh, and by hand.
@@ -132,6 +133,24 @@ else
 fi
 systemctl is-active --quiet bcm-block-metadata.service && log "OK: metadata service blocked from containers" \
     || fail "bcm-block-metadata.service not active: run ops/host/apply-host-hardening.sh"
+
+# Caddy, from its own repository (ops/host/52bcm-caddy-updates): updated by the
+# daily job. A version still not installed three days after it reached the
+# package list (whose date changes only when its content does) means the job
+# is not doing it.
+if ! apt-config dump | grep -qF "cloudsmith/caddy"; then
+    fail "Caddy is not in the automatic updates: run ops/host/apply-host-hardening.sh"
+else
+    caddy_installed="$(dpkg-query -W -f '${Version}' caddy 2>/dev/null || true)"
+    caddy_candidate="$(apt-cache policy caddy 2>/dev/null | awk '/Candidate/ {print $2}')"
+    caddy_list="$(ls -t /var/lib/apt/lists/*cloudsmith*caddy*Packages 2>/dev/null | head -1)"
+    if [ -n "$caddy_candidate" ] && [ "$caddy_installed" != "$caddy_candidate" ] && [ -n "$caddy_list" ] \
+            && [ $(( $(date +%s) - $(stat -c %Y "$caddy_list") )) -gt $(( 3 * 86400 )) ]; then
+        fail "Caddy $caddy_installed installed, $caddy_candidate available for over three days: the automatic update is not happening"
+    else
+        log "OK: Caddy $caddy_installed, updated automatically"
+    fi
+fi
 
 # --- ML model ------------------------------------------------------------------
 # The service loads only the model whose SHA-256 is in Git (bcm-v2-ml,

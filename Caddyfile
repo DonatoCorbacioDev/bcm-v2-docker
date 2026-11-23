@@ -50,7 +50,14 @@ bcm.donatocorbacio.dev {
 			header_down -Strict-Transport-Security
 		}
 	}
+	# The frontend's pages are only read (OWASP ASVS 4.1, only the methods
+	# needed): it has no Server Actions, every change goes to the API above.
+	# Anything else, PUT, DELETE, TRACE, PROPFIND, is refused here, where Next.js
+	# answered it with the page (200) or, for TRACE, a 500.
 	handle {
+		@notRead not method GET HEAD
+		header @notRead Allow "GET, HEAD"
+		respond @notRead 405
 		reverse_proxy 127.0.0.1:3000
 	}
 }
