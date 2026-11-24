@@ -1,0 +1,11 @@
+// Docker Engine's own updates (docker-ce, containerd and the plugins), installed
+// by the same daily job as Ubuntu's (OWASP ASVS 13, components kept up to date).
+// Docker comes from its own repository, which 50unattended-upgrades does not
+// list: it stayed at 29.6.2 while 29.10.0 was out (2026-11-24). An upgrade
+// restarts the Docker daemon, and with it every container, which come back by
+// themselves (restart: unless-stopped): a minute's pause, at the daily job's
+// time in the early morning. Installed as /etc/apt/apt.conf.d/53bcm-docker-updates
+// by ops/host/apply-host-hardening.sh; apt adds this list to the others.
+Unattended-Upgrade::Origins-Pattern {
+	"origin=Docker,codename=${distro_codename},label=Docker CE";
+};

@@ -11,6 +11,13 @@
 }
 
 bcm.donatocorbacio.dev {
+	# TLS 1.2 and 1.3 only, written down rather than left to Caddy's defaults
+	# (OWASP ASVS 12.1.1): 1.0 and 1.1 are refused, 1.3 preferred by Caddy
+	# itself, and its cipher suites for 1.2 are only the AEAD ones (ECDHE with
+	# AES-GCM or ChaCha20).
+	tls {
+		protocols tls1.2 tls1.3
+	}
 	header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
 	# The proxy adds "Via: 1.1 Caddy" to every answer: it tells an attacker
 	# which software to look up vulnerabilities for and serves no client

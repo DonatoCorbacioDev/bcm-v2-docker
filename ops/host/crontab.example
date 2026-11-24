@@ -7,12 +7,14 @@
 # passed). The real one is kept only on the VM, and in this file's shape.
 #
 #   01:15  nightly backup, offsite copy           check "BCM backup notturno"
+#   01:30  a copy of the logs off the VM (age-encrypted, logs/ in the bucket)
 #   04:15  demo data reset (Nortiva)
 #   05:00  Sunday: remove unused Docker images and build cache
 #   06:00  Monday: accounts, privileges, TLS, encryption, keys,
 #          configuration, connections, logs, updates             check "BCM permessi MySQL"
 
 15 1 * * * HEALTHCHECK_URL=https://hc-ping.com/<UUID> /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/backup/backup.sh >> /home/ubuntu/backups/bcm/backup.log 2>&1
+30 1 * * * /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/backup/logs-offsite.sh >> /home/ubuntu/backups/logs-offsite.log 2>&1
 15 4 * * * /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/demo/demo-reset.sh
 0 5 * * SUN /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/maintenance/prune-docker.sh >> /home/ubuntu/prune-docker.log 2>&1
 0 6 * * 1 HEALTHCHECK_URL=https://hc-ping.com/<UUID> /bin/bash /home/ubuntu/bcm-v2/bcm-v2-docker/ops/maintenance/weekly-checks.sh >> /home/ubuntu/backups/check-privileges.log 2>&1

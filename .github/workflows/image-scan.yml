@@ -57,12 +57,12 @@ jobs:
 
       # mysql and clamav are built too, on their official images with the system
       # packages updated (mysql/Dockerfile, clamav/Dockerfile): rebuilt here
-      # every Monday, they carry Debian's and Oracle's latest fixes. migrate is
-      # the backend's image under its own name (the cache makes it free): every
-      # image `docker compose config --images` lists must exist to be scanned.
+      # every Monday, they carry Debian's and Oracle's latest fixes. migrate runs
+      # the backend's own image, scanned once: every image `docker compose
+      # config --images` lists must exist to be scanned.
       - name: Build our images and pull the others
         run: |
-          docker compose build --pull mysql clamav backend migrate frontend ml
+          docker compose build --pull mysql clamav backend frontend ml
           docker compose pull redis
 
       # Each image is handed to Trivy as a file (docker save): Trivy never
@@ -70,9 +70,13 @@ jobs:
       # vulnerability that a newer package already fixes, which is one we can
       # act on (rebuild, bump the base image); unfixed ones are listed by the
       # report but cannot be acted on yet.
+      # Each image's inventory too (OWASP ASVS 15.1, a software bill of
+      # materials): every OS package and library in it, CycloneDX, kept as this
+      # run's artifact, so what runs in production can be looked up when a new
+      # vulnerability is published, without rebuilding anything.
       - name: Scan every image
         run: |
-          mkdir -p "$RUNNER_TEMP/trivy-cache" "$RUNNER_TEMP/images"
+          mkdir -p "$RUNNER_TEMP/trivy-cache" "$RUNNER_TEMP/images" "$RUNNER_TEMP/sboms"
           status=0
           for image in $(docker compose config --images | sort -u); do
             file="$RUNNER_TEMP/images/$(echo "$image" | tr '/:' '__').tar"
@@ -85,7 +89,22 @@ jobs:
                 --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
                 --exit-code 1 --no-progress --format table \
               || { echo "::error::$image has HIGH/CRITICAL vulnerabilities with a fix available"; status=1; }
+            docker run --rm \
+              -v "$RUNNER_TEMP/trivy-cache:/root/.cache/trivy" \
+              -v "$RUNNER_TEMP/images:/images:ro" \
+              -v "$RUNNER_TEMP/sboms:/sboms" \
+              "$TRIVY_IMAGE" image --input "/images/$(basename "$file")" \
+                --format cyclonedx --no-progress \
+                --output "/sboms/$(echo "$image" | tr '/:' '__').cdx.json"
             echo "::endgroup::"
             rm -f "$file"
           done
           exit $status
+
+      - name: Keep the images' SBOMs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-sboms
+          path: ${{ runner.temp }}/sboms/
+          retention-days: 90

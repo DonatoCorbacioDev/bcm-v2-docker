@@ -5,7 +5,7 @@
 #
 # Installs the production VM's host settings kept in this directory: SSH
 # (10-bcm-hardening.conf), the automatic reboot after security updates
-# (51bcm-auto-reboot), Caddy's own updates (52bcm-caddy-updates), the journal's size and retention (journald-bcm.conf), the containers kept away from the instance metadata
+# (51bcm-auto-reboot), Caddy's and Docker's own updates (52bcm-caddy-updates, 53bcm-docker-updates), the journal's size and retention (journald-bcm.conf), the containers kept away from the instance metadata
 # service (bcm-block-metadata.service), the firewall openings the stack needs
 # (80, 443, Ollama from the app network) and Ollama's own setting
 # (ollama-override.conf). Safe to run again: what is already there is kept. On the VM, from this repository's root:
@@ -26,6 +26,7 @@ sudo systemctl reload ssh
 
 sudo install -m 644 -o root -g root "$HERE/51bcm-auto-reboot" /etc/apt/apt.conf.d/51bcm-auto-reboot
 sudo install -m 644 -o root -g root "$HERE/52bcm-caddy-updates" /etc/apt/apt.conf.d/52bcm-caddy-updates
+sudo install -m 644 -o root -g root "$HERE/53bcm-docker-updates" /etc/apt/apt.conf.d/53bcm-docker-updates
 
 if ! sudo cmp -s "$HERE/journald-bcm.conf" /etc/systemd/journald.conf.d/bcm.conf; then
     sudo install -D -m 644 -o root -g root "$HERE/journald-bcm.conf" /etc/systemd/journald.conf.d/bcm.conf
@@ -76,6 +77,9 @@ apt-config dump | grep -E "Unattended-Upgrade::Automatic-Reboot" | sed 's/^/  /'
 echo "Caddy updates (automatic, from its own repository):"
 apt-config dump | grep -F "cloudsmith/caddy" | sed 's/^/  /'
 echo "  installed $(dpkg-query -W -f '${Version}' caddy), available $(apt-cache policy caddy | awk '/Candidate/ {print $2}')"
+echo "Docker Engine updates (automatic, from its own repository):"
+apt-config dump | grep -F "origin=Docker" | sed 's/^/  /'
+echo "  installed $(dpkg-query -W -f '${Version}' docker-ce), available $(apt-cache policy docker-ce | awk '/Candidate/ {print $2}')"
 echo "Journal (containers' logs):"
 systemd-analyze cat-config systemd/journald.conf 2>/dev/null | grep -E "^(Storage|SystemMaxUse|MaxRetentionSec)=" | sed 's/^/  /'
 journalctl --disk-usage 2>/dev/null | sed 's/^/  /'

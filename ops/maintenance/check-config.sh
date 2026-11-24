@@ -19,10 +19,12 @@
 #     pending for more than three, the metadata service still blocked, Caddy
 #     in the automatic updates and not left behind;
 #   - the ML model: the one whose hash is approved in Git;
-#   - the backups: the last offsite copy less than 26 hours old.
+#   - the backups and the logs: the last copy of each off the VM less than 26 hours old;
+#   - Caddy and Docker Engine in the automatic updates and not left behind;
+#   - the public certificate more than 14 days from its expiry.
 # Any failure exits 1. Run weekly from ops/maintenance/weekly-checks.sh, and by hand.
 #
-# Environment overrides (optional): MYSQL_CONTAINER, BACKUP_LOG.
+# Environment overrides (optional): MYSQL_CONTAINER, BACKUP_LOG, LOGS_LOG.
 
 set -euo pipefail
 umask 077
@@ -34,6 +36,7 @@ cd "$SCRIPT_DIR/../.."
 source "ops/secrets/lib.sh"
 MYSQL_CONTAINER="${MYSQL_CONTAINER:-bcm-mysql}"
 BACKUP_LOG="${BACKUP_LOG:-$HOME/backups/bcm/backup.log}"
+LOGS_LOG="${LOGS_LOG:-$HOME/backups/logs-offsite.log}"
 # Failed connections per day above which something is knocking.
 MAX_ABORTED_PER_DAY=50
 
@@ -134,21 +137,43 @@ fi
 systemctl is-active --quiet bcm-block-metadata.service && log "OK: metadata service blocked from containers" \
     || fail "bcm-block-metadata.service not active: run ops/host/apply-host-hardening.sh"
 
-# Caddy, from its own repository (ops/host/52bcm-caddy-updates): updated by the
-# daily job. A version still not installed three days after it reached the
-# package list (whose date changes only when its content does) means the job
-# is not doing it.
-if ! apt-config dump | grep -qF "cloudsmith/caddy"; then
-    fail "Caddy is not in the automatic updates: run ops/host/apply-host-hardening.sh"
-else
-    caddy_installed="$(dpkg-query -W -f '${Version}' caddy 2>/dev/null || true)"
-    caddy_candidate="$(apt-cache policy caddy 2>/dev/null | awk '/Candidate/ {print $2}')"
-    caddy_list="$(ls -t /var/lib/apt/lists/*cloudsmith*caddy*Packages 2>/dev/null | head -1)"
-    if [ -n "$caddy_candidate" ] && [ "$caddy_installed" != "$caddy_candidate" ] && [ -n "$caddy_list" ] \
-            && [ $(( $(date +%s) - $(stat -c %Y "$caddy_list") )) -gt $(( 3 * 86400 )) ]; then
-        fail "Caddy $caddy_installed installed, $caddy_candidate available for over three days: the automatic update is not happening"
+# Caddy and Docker Engine, each from its own repository (ops/host/52bcm-caddy-updates,
+# 53bcm-docker-updates): updated by the daily job. A version still not installed
+# three days after it reached the package list (whose date changes only when
+# its content does) means the job is not doing it.
+check_updated() { # <label> <package> <apt-config pattern> <package-list glob>
+    local label=$1 package=$2 pattern=$3 glob=$4 installed candidate list
+    if ! apt-config dump | grep -qF "$pattern"; then
+        fail "$label is not in the automatic updates: run ops/host/apply-host-hardening.sh"
+        return
+    fi
+    installed="$(dpkg-query -W -f '${Version}' "$package" 2>/dev/null || true)"
+    candidate="$(apt-cache policy "$package" 2>/dev/null | awk '/Candidate/ {print $2}')"
+    # shellcheck disable=SC2086
+    list="$(ls -t $glob 2>/dev/null | head -1)"
+    if [ -n "$candidate" ] && [ "$installed" != "$candidate" ] && [ -n "$list" ] \
+            && [ $(( $(date +%s) - $(stat -c %Y "$list") )) -gt $(( 3 * 86400 )) ]; then
+        fail "$label $installed installed, $candidate available for over three days: the automatic update is not happening"
     else
-        log "OK: Caddy $caddy_installed, updated automatically"
+        log "OK: $label $installed, updated automatically"
+    fi
+}
+check_updated Caddy caddy "cloudsmith/caddy" "/var/lib/apt/lists/*cloudsmith*caddy*Packages"
+check_updated "Docker Engine" docker-ce "origin=Docker" "/var/lib/apt/lists/download.docker.com*Packages"
+
+# The public certificate (Caddy renews it by itself, 30 days ahead): failing
+# 14 days before it expires leaves two weekly runs to notice a broken renewal.
+public_host="$(awk '/^[a-z0-9.-]+\.[a-z]+ \{/ {print $1; exit}' Caddyfile)"
+not_after="$(echo | timeout 10 openssl s_client -connect 127.0.0.1:443 -servername "$public_host" 2>/dev/null \
+    | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)"
+if [ -z "$not_after" ]; then
+    fail "could not read the public certificate of $public_host"
+else
+    cert_days=$(( ( $(date -u -d "$not_after" +%s) - $(date -u +%s) ) / 86400 ))
+    if [ "$cert_days" -lt 14 ]; then
+        fail "the public certificate of $public_host expires in $cert_days days ($not_after): Caddy's renewal is failing"
+    else
+        log "OK: public certificate of $public_host, $cert_days days left"
     fi
 fi
 
@@ -168,6 +193,12 @@ if [ -n "$last_offsite" ] && [ $(( $(date +%s) - $(date -d "$last_offsite" +%s) 
     log "OK: last offsite copy $last_offsite"
 else
     fail "no offsite copy in the last 26 hours (last: ${last_offsite:-none}; $BACKUP_LOG)"
+fi
+last_logs="$(grep -h 'logs offsite OK' "$LOGS_LOG" 2>/dev/null | tail -1 | cut -d' ' -f1 || true)"
+if [ -n "$last_logs" ] && [ $(( $(date +%s) - $(date -d "$last_logs" +%s) )) -lt $(( 26 * 3600 )) ]; then
+    log "OK: last copy of the logs off the VM $last_logs"
+else
+    fail "no copy of the logs off the VM in the last 26 hours (last: ${last_logs:-none}; $LOGS_LOG)"
 fi
 
 if [ "$failures" -gt 0 ]; then

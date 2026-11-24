@@ -177,9 +177,13 @@ services:
   # with `up -d migrate backend`, not `--no-deps backend`, or a new migration
   # is never applied and the backend refuses to start.
   migrate:
-    build:
-      context: ../bcm-v2-backend
-      dockerfile: Dockerfile
+    # The backend's own image, never one built apart (2026-11-24: an image of
+    # its own, left unbuilt by a deploy, applied the old migrations and the new
+    # backend refused to start). Building the backend updates this too;
+    # pull_policy never, so a missing image is an error here, not something
+    # fetched from Docker Hub under the same name.
+    image: bcm-v2-docker-backend
+    pull_policy: never
     container_name: bcm-migrate
     logging: *default-logging
     restart: "no"
@@ -211,6 +215,8 @@ services:
 
   # Spring Boot Backend
   backend:
+    # Named: migrate runs this same image.
+    image: bcm-v2-docker-backend
     build:
       context: ../bcm-v2-backend
       dockerfile: Dockerfile
