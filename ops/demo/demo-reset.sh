@@ -9,7 +9,8 @@
 #   1. reseeds org 3 from bcm-v2-backend/sql/DML/seed-demo-org.sql
 #      (contracts, costs and revenues, budgets, suppliers, Nortiva's IBAN)
 #   2. resets the "demo" user's password and turns off any 2FA a visitor
-#      enabled on it
+#      enabled on it; setting another account's password asks for the
+#      admin's own password again (POST /auth/reauth, X-Reauth-Token)
 #   3. attaches the purchase invoices (scripts/seed_demo_purchase_invoices.py):
 #      one paid by SEPA, one waiting for confirmation, one with a changed IBAN
 #      that the anti-fraud check blocks
@@ -101,9 +102,20 @@ docker exec "$BACKEND_CONTAINER" sh -c "rm -rf ${DIRS}"
 echo "UPDATE users SET totp_enabled=0, totp_secret_encrypted=NULL WHERE username='${DEMO_USERNAME}' AND organization_id='${ORG_ID}';" | mysql_root
 ADMIN_TOKEN=$(login "$ADMIN_USERNAME" "$ADMIN_PW")
 DEMO_USER_ID=$(echo "SELECT id FROM users WHERE username='${DEMO_USERNAME}' AND organization_id='${ORG_ID}';" | mysql_root)
-curl -sS -o /dev/null -w "reset demo password: HTTP %{http_code}\n" -X PATCH "$BASE_URL/users/${DEMO_USER_ID}" \
+# Another account's password: the backend asks the admin's own password again
+# (ReauthenticationService, ASVS 7.5.1), or answers 428. demo_admin has no 2FA.
+REAUTH_TOKEN=$(curl -sS --fail -X POST "$BASE_URL/auth/reauth" \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "Content-Type: application/json" \
-  -d "$(python3 -c 'import json,sys; print(json.dumps({"password": sys.argv[1]}))' "$DEMO_PASSWORD")"
+  -d "$(python3 -c 'import json,sys; print(json.dumps({"password": sys.argv[1]}))' "$ADMIN_PW")" \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["reauthToken"])') || REAUTH_TOKEN=""
+STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -X PATCH "$BASE_URL/users/${DEMO_USER_ID}" \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "X-Reauth-Token: ${REAUTH_TOKEN}" -H "Content-Type: application/json" \
+  -d "$(python3 -c 'import json,sys; print(json.dumps({"password": sys.argv[1]}))' "$DEMO_PASSWORD")")
+if [[ "$STATUS" == 2* ]]; then
+  log "reset demo password: HTTP ${STATUS}"
+else
+  log "ERROR: demo password not reset (HTTP ${STATUS})"
+fi
 
 # 3) Purchase invoices, on the two purchase contracts looked up by number
 #    (their ids change every night).
