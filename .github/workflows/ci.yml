@@ -178,7 +178,7 @@ jobs:
             -d '{
               "organizationName": "CI Smoke Test Org",
               "adminUsername": "ci-smoke-admin",
-              "adminPassword": "ci-smoke-password-123",
+              "adminPassword": "Gabbiano-Libeccio-Torre-41",
               "adminEmail": "ci-smoke@example.com",
               "adminFirstName": "CI",
               "adminLastName": "Smoke",
