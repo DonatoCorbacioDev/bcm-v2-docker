@@ -38,7 +38,9 @@ import uuid
 API = os.environ.get("API_BASE", "http://127.0.0.1:8090/api/v1").rstrip("/")
 BACKEND_CONTAINER = os.environ.get("BACKEND_CONTAINER", "bcm-backend")
 TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-10-28")
-PASSWORD = "Bola-Smoke-2026!x"
+# No word of the accounts in it ("bola" is in their names), not a common or
+# leaked password: the backend refuses those since 2026-11-24.
+PASSWORD = "Fake-Scirocco-Maestrale-62"  # gitleaks:allow
 RUN = uuid.uuid4().hex[:8]
 
 results = []

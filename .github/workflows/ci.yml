@@ -172,13 +172,18 @@ jobs:
       # sending it - that log line is how this test gets it.
       - name: Register an org and log in
         id: register
+        env:
+          # A throwaway account's password, for this run's own database only.
+          # Strong enough for the backend's password check (no word of the
+          # account in it, not a common or leaked password).
+          SMOKE_ADMIN_PASSWORD: Fake-Gabbiano-Libeccio-41  # gitleaks:allow
         run: |
           STARTED=$(curl -sf -X POST "$API_BASE/organizations/register" \
             -H "Content-Type: application/json" \
             -d '{
               "organizationName": "CI Smoke Test Org",
               "adminUsername": "ci-smoke-admin",
-              "adminPassword": "Gabbiano-Libeccio-Torre-41",
+              "adminPassword": "'"$SMOKE_ADMIN_PASSWORD"'",
               "adminEmail": "ci-smoke@example.com",
               "adminFirstName": "CI",
               "adminLastName": "Smoke",
