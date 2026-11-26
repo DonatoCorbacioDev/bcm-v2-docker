@@ -113,6 +113,8 @@ Run inside the backend container, so the files belong to its own user.
 
 ## 7. If the old VM was compromised
 
+What to do before this point, from the first signs of an attack (stop it, keep the evidence, tell the people and the authority concerned): [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md).
+
 The restored secrets are the ones the attacker may have read. Once the new VM is in service, rotate all of them: `JWT_SECRET` (with `JWT_SECRET_PREVIOUS`), the MySQL passwords (`ops/mysql/rotate-password.sh`), Redis (`ops/redis/create-acl.sh`), `TOTP_ENCRYPTION_KEY` (`ops/secrets/rotate-totp-key.sh`), the internal API keys, ML's signing key; at the providers, the Stripe keys and the mail password. Then a new recovery bundle. Terminate the old VM, after copying anything needed to understand what happened.
 
 ## Rehearsal
