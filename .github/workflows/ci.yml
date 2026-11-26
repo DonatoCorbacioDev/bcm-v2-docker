@@ -60,9 +60,12 @@ jobs:
           MAIL_PASSWORD: test
 
       # The VM's reverse proxy config: a typo there takes the site down on reload.
+      # Same Caddy version as the VM (`caddy version` there): an older one
+      # refuses directives the VM accepts (roll_interval came in 2.11), a newer
+      # one could accept what the VM refuses. Move it when the VM updates.
       - name: Validate the Caddyfile
         run: >-
-          docker run --rm -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.10.2
+          docker run --rm -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.9
           caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
   smoke-test:
