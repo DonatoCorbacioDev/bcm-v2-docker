@@ -25,6 +25,28 @@ bcm.donatocorbacio.dev {
 	# Caddy until the response is written, so it also covers proxied answers.
 	header -Via
 
+	# Access log: who called what, kept 14 days, so an attack can be seen and
+	# traced (OWASP Logging Cheat Sheet; INCIDENT_RESPONSE.md). A remote IP is
+	# personal data, hence the short life (one file a day, deleted after 14)
+	# and nothing more than needed: no request or response headers (cookies,
+	# browser), and the secrets some URLs carry replaced before writing, the
+	# calendar feed's token in its path and the ?token= of the password-reset
+	# and invitation links.
+	log {
+		output file /var/log/caddy/access.log {
+			roll_interval 24h
+			roll_keep_for 336h
+			roll_keep 30
+			roll_size 100MiB
+		}
+		format filter {
+			request>uri regexp "(/calendar/)[^/?]+(\.ics)|([?&]token=)[^&]*" "${1}${3}REDACTED${2}"
+			request>headers delete
+			resp_headers delete
+			wrap json
+		}
+	}
+
 	# /actuator/prometheus leaks internal request patterns/endpoint names
 	# (see docs/SECURITY.md checklist) and has no scraper wired yet, so it's
 	# restricted to the VM itself + private networks instead of being left

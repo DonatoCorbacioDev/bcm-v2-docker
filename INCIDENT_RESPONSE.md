@@ -42,34 +42,19 @@ Nel dubbio tra due livelli, scegli il più grave.
 
 ### 3.1 Bloccare un indirizzo IP
 
-Caddy (il server web) normalmente **non registra** le richieste. Per vedere chi
-attacca, adesso:
+Ogni richiesta al sito finisce nel registro di Caddy (il server web),
+`/var/log/caddy/access.log`: un file al giorno, cancellato dopo 14 giorni.
 
 ```bash
-# Gli indirizzi collegati in questo momento, i più presenti in cima
+# Chi ha fatto più richieste nel registro di oggi
+sudo grep -o '"remote_ip":"[^"]*"' /var/log/caddy/access.log | sort | uniq -c | sort -rn | head -20
+# Le richieste di un indirizzo, le ultime 50
+sudo grep '"remote_ip":"<IP>"' /var/log/caddy/access.log | tail -50
+# Gli indirizzi collegati in questo momento
 sudo ss -tn state established '( sport = :443 )' | awk 'NR>1{sub(/:[0-9]+$/,"",$4); print $4}' | sort | uniq -c | sort -rn | head -20
 # Cosa vede il backend: accessi falliti, blocchi, rifiuti
 docker compose logs --since 1h backend | grep -i -E "fail|denied|locked|refused|rate" | tail -50
 ```
-
-Se l'attacco dura, attiva il registro delle richieste **solo per l'emergenza**:
-in `/etc/caddy/Caddyfile`, dentro il blocco `bcm.donatocorbacio.dev { ... }`,
-aggiungi
-
-```
-	log {
-		output file /var/log/caddy/access.log
-	}
-```
-
-poi `sudo mkdir -p /var/log/caddy && sudo chown caddy:caddy /var/log/caddy && sudo systemctl reload caddy`, e
-
-```bash
-sudo grep -o '"remote_ip":"[^"]*"' /var/log/caddy/access.log | sort | uniq -c | sort -rn | head -20
-```
-
-Finita l'emergenza, togli il blocco `log` e ricarica: il registro contiene
-indirizzi IP, che sono dati personali, e non va tenuto senza motivo.
 
 ```bash
 # Blocca un indirizzo (vale fino al riavvio del server)
@@ -117,7 +102,7 @@ Prima di qualsiasi ripristino o rotazione:
 D=~/incidente-$(date +%Y%m%d-%H%M); mkdir -p $D
 docker compose logs --since 72h --timestamps > $D/container.log
 sudo journalctl -u caddy --since "72 hours ago" -o cat > $D/caddy.log
-sudo cp /var/log/caddy/access.log $D/ 2>/dev/null   # solo se l'avevi attivato al §3.1
+sudo cp /var/log/caddy/access*.log* $D/      # il registro delle richieste, 14 giorni
 sudo journalctl --since "72 hours ago" > $D/sistema.log
 sudo last -a > $D/accessi-ssh.txt; sudo lastb -a 2>/dev/null | head -500 > $D/accessi-ssh-falliti.txt
 docker ps -a > $D/container.txt; sudo ss -tlnp > $D/porte.txt
