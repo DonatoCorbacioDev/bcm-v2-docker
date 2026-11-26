@@ -107,7 +107,9 @@ services:
   # Redis — backs the distributed login/register rate limiter (RateLimitingFilter).
   # Not exposed beyond the compose network; nothing outside this stack talks to it.
   redis:
-    image: redis:7-alpine
+    # Redis 7.4 on the official image, its system packages updated (redis/Dockerfile).
+    build:
+      context: ./redis
     container_name: bcm-redis
     logging: *default-logging
     restart: unless-stopped

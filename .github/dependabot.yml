@@ -17,6 +17,8 @@ updates:
   # tested on its own, never a weekly pull request.
   # The ClamAV image (clamav/Dockerfile): the next 1.5 patch release only, as
   # MySQL's; a new minor or major version is decided and tested on its own.
+  # The Redis image (redis/Dockerfile): the next 7.4 patch release only, the
+  # same rule.
   - package-ecosystem: "docker"
     directory: "/clamav"
     schedule:
@@ -33,6 +35,16 @@ updates:
       interval: "weekly"
     ignore:
       - dependency-name: "mysql"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    labels:
+      - "dependencies"
+
+  - package-ecosystem: "docker"
+    directory: "/redis"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "redis"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
     labels:
       - "dependencies"
